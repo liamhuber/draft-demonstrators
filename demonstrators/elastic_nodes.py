@@ -1,9 +1,12 @@
 import ase
 import flowrep as fr
+import semantikon
 from ase import build
 
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import bulk, elastic
+
+from . import uris
 
 ### Wrappers
 
@@ -18,10 +21,13 @@ class CalcInputStatic(engine_mod.CalcInputStatic): ...
 @fr.workflow
 def elastic_constants(
     engine: engine_mod.ASEEngine,
-    structure: ase.Atoms,
+    structure: semantikon.u(ase.Atoms, uris=uris.atomic_structure),
+    # Physically, we're looking for a 3d structure, beyond that it's up to the user
+    # if what they give in will give back physically meaningful numbers, IMO
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
     norm_strains: tuple[float, ...] = (-0.01, -0.005, 0.005, 0.01),
     shear_strains: tuple[float, ...] = (-0.06, -0.03, 0.03, 0.06),
+    # Neither PMDco nor TTO have "strain" entries...
 ):
     relax_engine = elastic.with_calc_input(engine=engine, calc_input=relaxation_config)
     relaxed_output = engine_mod.calculate(structure=structure, engine=relax_engine)
@@ -53,18 +59,26 @@ def elastic_constants(
 
 
 @fr.atomic("unit_cell")
-def bulk_unit(symbol: str) -> ase.Atoms:
+def bulk_unit(symbol: str) -> semantikon.u(ase.Atoms, uris=uris.atomic_structure):
+    # also "bulk"... and "3D (data)"
     return build.bulk(symbol)
+
+
+@fr.atomic("bulk_modulus")
+def get_bulk_modulus(
+    elastic_summary: dict,
+) -> semantikon.u(float, uri=uris.bulk_modulus):
+    return elastic_summary["K_VRH"]
 
 
 @fr.workflow
 def unary_elastic_tensor(
     engine: engine_mod.ASEEngine,
-    symbol: str,
+    symbol: semantikon.u(str, uri=uris.chemical_composition),
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
     norm_strains: tuple[float, ...] = (-0.01, -0.005, 0.005, 0.01),
     shear_strains: tuple[float, ...] = (-0.06, -0.03, 0.03, 0.06),
-):
+) -> tuple[list[list[float]], semantikon.u(float, uri=uris.bulk_modulus)]:
     structure = bulk_unit(symbol)
     _, fit, summary = elastic_constants(
         engine=engine,
@@ -73,5 +87,6 @@ def unary_elastic_tensor(
         norm_strains=norm_strains,
         shear_strains=shear_strains,
     )
+    bulk_modulus = get_bulk_modulus(summary)
     tensor_ieee = fr.std.getitem(summary, "elastic_tensor_ieee")
-    return tensor_ieee
+    return tensor_ieee, bulk_modulus
