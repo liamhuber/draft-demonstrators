@@ -1,0 +1,8 @@
+*.pyc
+.DS_Store
+.claude/
+.coverage
+pyiron.log
+.idea/
+.ipynb_checkpoints/
+CLAUDE.md

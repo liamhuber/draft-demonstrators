@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.11,<3.14
+  - flowrep >=0.6.2,<0.7.0
+  - pyiron_workflow >=0.19.0,<0.20.0
+  - pandas >=3.0.5,<3.1.0
+  - pip:
+    - lz-GB-code==0.1.0
