@@ -6,5 +6,6 @@ dependencies:
   - pyiron_workflow >=0.19.0,<0.20.0
   - pandas >=3.0.5,<3.1.0
   - rdflib >=7.6.0,<7.7.0
+  - pip
   - pip:
     - lz-GB-code==0.1.0
