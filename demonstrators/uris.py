@@ -1,5 +1,7 @@
 import rdflib
 
+Placeholder = rdflib.Namespace("http://www.example.org/")
+
 
 class PMDco:
     ns = rdflib.Namespace("https://w3id.org/pmd/co/PMD_")
@@ -10,3 +12,9 @@ class PMDco:
     chemical_composition = ns["0000551"]
     energy = ns["0020142"]
     three_d = ns["0025005"]
+
+
+class CMSO:
+    ns = rdflib.Namespace("https://purls.helmholtz-metadaten.de/cmso/")
+
+    atom = ns["Atom"]
