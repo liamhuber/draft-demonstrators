@@ -5,14 +5,7 @@ from ase import build
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import bulk, elastic
 
-from . import uris
-
-### Wrappers
-
-
-@fr.dataclass
-class CalcInputStatic(engine_mod.CalcInputStatic): ...
-
+from . import shared, uris
 
 ### Restructured
 
@@ -36,8 +29,8 @@ def elastic_constants(
     deformed_structures, strains = elastic.generate_mp_deformations(
         structure=ref_structure, norm_strains=norm_strains, shear_strains=shear_strains
     )
-    static_config = CalcInputStatic()
-    deform_engine = elastic.with_calc_input(engine=engine, calc_input=static_config)
+    static_config = engine_mod.CalcInputStatic()
+    deform_engine = shared.with_calc_input(engine=engine, calc_input=static_config)
 
     deformation_results = bulk.evaluate_structures(
         structures=deformed_structures, engine=deform_engine
