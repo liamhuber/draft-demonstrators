@@ -345,7 +345,7 @@ def quasiharmonic_free_energy(
     )
     F_TV, S_TV, Cv_TV = free_energy_mod.quasiharmonic._harmonic_grid_over_volumes(
         strained_structures=relaxed_structures,
-        engine=engine,
+        engine=sub_engine,
         fc2_supercell_matrix=fc2_supercell_matrix,
         temperatures=temperatures,
         displacement_distance=displacement_distance,
