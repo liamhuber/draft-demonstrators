@@ -1,3 +1,4 @@
+import enum
 import itertools
 import warnings
 from collections.abc import Mapping, Sequence
@@ -10,43 +11,55 @@ from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
 
 from . import shared, uris
 
-
 ###
 # Generalise pyiron_workflow.physics.bulk.generate_structures
 ###
 
-StrainSpec = tuple[float, float] | Mapping[str, Sequence[float]]
 
-VOLUME_CONSERVING_MODES = frozenset({"c_over_a", "b_over_a"})
+class StrainMode(enum.StrEnum):
+    ISO = "iso"
+    A = "a"
+    B = "b"
+    C = "c"
+    C_OVER_A = "c_over_a"
+    B_OVER_A = "b_over_a"
 
 
-def _mode_scales(mode: str, eps: float) -> tuple[float, float, float]:
+StrainSpec = tuple[float, float] | Mapping[StrainMode, Sequence[float]]
+
+VOLUME_CONSERVING_MODES = frozenset({StrainMode.C_OVER_A, StrainMode.B_OVER_A})
+
+
+def _mode_scales(mode: StrainMode, eps: float) -> tuple[float, float, float]:
     """Per-lattice-vector scale factors for one strain mode at magnitude ``eps``."""
     f = 1.0 + eps
-    if mode == "iso":
-        return (f, f, f)
-    if mode == "a":
-        return (f, 1.0, 1.0)
-    if mode == "b":
-        return (1.0, f, 1.0)
-    if mode == "c":
-        return (1.0, 1.0, f)
-    if mode == "c_over_a":  # c up by f, a and b down by sqrt(f): volume conserving
-        g = f ** (-0.5)
-        return (g, g, f)
-    if mode == "b_over_a":  # b up by f, a down by f: volume conserving
-        return (1.0 / f, f, 1.0)
-    raise ValueError(
-        f"Unknown strain mode {mode!r}; expected one of 'iso', 'a', 'b', 'c', "
-        "'c_over_a', 'b_over_a'."
-    )
+    match mode:
+        case StrainMode.ISO:
+            return (f, f, f)
+        case StrainMode.A:
+            return (f, 1.0, 1.0)
+        case StrainMode.B:
+            return (1.0, f, 1.0)
+        case StrainMode.C:
+            return (1.0, 1.0, f)
+        case (
+            StrainMode.C_OVER_A
+        ):  # c up by f, a and b down by sqrt(f): volume conserving
+            g = f ** (-0.5)
+            return (g, g, f)
+        case StrainMode.B_OVER_A:  # b up by f, a down by f: volume conserving
+            return (1.0 / f, f, 1.0)
+        case _:
+            raise ValueError(
+                f"Unknown strain mode {mode!r}; expected one of {[m.value for m in StrainMode]}."
+            )
 
 
 def _is_plain_range(strain_range) -> bool:
     return (
-            isinstance(strain_range, (tuple, list))
-            and len(strain_range) == 2
-            and all(isinstance(v, (int, float)) for v in strain_range)
+        isinstance(strain_range, (tuple, list))
+        and len(strain_range) == 2
+        and all(isinstance(v, (int, float)) for v in strain_range)
     )
 
 
@@ -73,7 +86,9 @@ def apply_strains(base: ase.Atoms, strains: Mapping[str, float]) -> ase.Atoms:
     for mode, eps in strains.items():
         scales *= np.asarray(_mode_scales(mode, float(eps)), dtype=float)
     strained = base.copy()
-    strained.set_cell(np.asarray(strained.get_cell()) * scales[:, None], scale_atoms=True)
+    strained.set_cell(
+        np.asarray(strained.get_cell()) * scales[:, None], scale_atoms=True
+    )
     return strained
 
 
@@ -114,9 +129,11 @@ def generate_structures(
 
     return strained_structures
 
+
 ###
 # Interject between generating structures and evaluating E-V curves
 ###
+
 
 @fr.atomic("shape_candidates", "shape_strains")
 def expand_shape_candidates(
@@ -149,16 +166,19 @@ def expand_shape_candidates(
     groups, labels = [], []
     for structure in structures:
         combos = [
-            dict(zip(modes, combo)) for combo in itertools.product(*([grid] * len(modes)))
+            dict(zip(modes, combo))
+            for combo in itertools.product(*([grid] * len(modes)))
         ]
         groups.append([apply_strains(structure, combo) for combo in combos])
         labels.append(combos)
     return groups, labels
 
+
 ###
 # Instead of
 # pyiron_workflow.physics.free_energy.quasiharmonic._static_energies_per_volume
 ###
+
 
 def _quadratic_stationary_point(X: np.ndarray, y: np.ndarray) -> np.ndarray | None:
     """Least-squares quadratic through (X, y); its minimum, or None if not convex."""
@@ -193,9 +213,7 @@ def _quadratic_stationary_point(X: np.ndarray, y: np.ndarray) -> np.ndarray | No
 def _evaluate_shape(
     structure: ase.Atoms, engine: engine_mod.Engine, tag: str, counter
 ) -> float:
-    sub_engine = engine.with_working_directory(
-        f"{tag}/shape_{next(counter):04d}"
-    )
+    sub_engine = engine.with_working_directory(f"{tag}/shape_{next(counter):04d}")
     out = engine_mod.calculate(structure=structure, engine=sub_engine)
     if not out.converged:
         raise RuntimeError(
@@ -207,14 +225,14 @@ def _evaluate_shape(
 
 @fr.atomic("energies_per_atom", "volumes_per_atom", "relaxed_structures")
 def static_shape_relaxed_energies(
-        structures: list[ase.Atoms],
-        shape_candidates: list[list[ase.Atoms]],
-        shape_strains: list[list[dict]],
-        engine: engine_mod.Engine,
-        shape_modes: Sequence[str] = (),
-        shape_window: float = 0.06,
-        num_shape_points: int = 5,
-        refine_rounds: int = 2,
+    structures: list[ase.Atoms],
+    shape_candidates: list[list[ase.Atoms]],
+    shape_strains: list[list[dict]],
+    engine: engine_mod.Engine,
+    shape_modes: Sequence[str] = (),
+    shape_window: float = 0.06,
+    num_shape_points: int = 5,
+    refine_rounds: int = 2,
 ):
     """Minimise the static energy over shape at fixed volume, per volume.
 
@@ -228,12 +246,15 @@ def static_shape_relaxed_energies(
     for i, base in enumerate(structures):
         counter = itertools.count()
 
-        candidates = list(shape_candidates[i])   # round 0, pre-built by node 2
+        candidates = list(shape_candidates[i])  # round 0, pre-built by node 2
         labels = list(shape_strains[i])
         best_energy, best_strain = np.inf, {}
 
         if not modes:
-            best_energy, best_strain = _evaluate_shape(candidates[0], engine, f"vol_E_{i:03d}", counter), {}
+            best_energy, best_strain = (
+                _evaluate_shape(candidates[0], engine, f"vol_E_{i:03d}", counter),
+                {},
+            )
         else:
             centre = np.zeros(len(modes))
             window = float(shape_window)
@@ -249,7 +270,12 @@ def static_shape_relaxed_energies(
                     candidates = [apply_strains(base, combo) for combo in labels]
 
                 X = np.array([[label[m] for m in modes] for label in labels])
-                y = np.array([_evaluate_shape(c, engine, f"vol_E_{i:03d}", counter) for c in candidates])
+                y = np.array(
+                    [
+                        _evaluate_shape(c, engine, f"vol_E_{i:03d}", counter)
+                        for c in candidates
+                    ]
+                )
 
                 k = int(np.argmin(y))
                 if y[k] < best_energy:
@@ -279,6 +305,7 @@ def static_shape_relaxed_energies(
 ###
 # Putting it together: a more flexible quasiharmonic workflow
 ###
+
 
 @fr.workflow
 def quasiharmonic_free_energy(
@@ -333,15 +360,17 @@ def quasiharmonic_free_energy(
         shape_window=shape_window,
         num_shape_points=num_shape_points,
     )
-    energies_per_atom, volumes_per_atom, relaxed_structures = static_shape_relaxed_energies(
-        structures=strained_structures,
-        shape_candidates=shape_candidates,
-        shape_strains=shape_strains,
-        engine=sub_engine,
-        shape_modes=shape_modes,
-        shape_window=shape_window,
-        num_shape_points=num_shape_points,
-        refine_rounds=shape_refine_rounds,
+    energies_per_atom, volumes_per_atom, relaxed_structures = (
+        static_shape_relaxed_energies(
+            structures=strained_structures,
+            shape_candidates=shape_candidates,
+            shape_strains=shape_strains,
+            engine=sub_engine,
+            shape_modes=shape_modes,
+            shape_window=shape_window,
+            num_shape_points=num_shape_points,
+            refine_rounds=shape_refine_rounds,
+        )
     )
     F_TV, S_TV, Cv_TV = free_energy_mod.quasiharmonic._harmonic_grid_over_volumes(
         strained_structures=relaxed_structures,
@@ -431,7 +460,9 @@ def _relax_shape_at_fixed_volume(
         star = _quadratic_stationary_point(X, y)
         if star is not None and np.all(np.abs(star - centre) <= 2.0 * window):
             trial = dict(zip(modes, star))
-            trial_energy = _evaluate_shape(apply_strains(base, trial), engine, tag, counter)
+            trial_energy = _evaluate_shape(
+                apply_strains(base, trial), engine, tag, counter
+            )
             if trial_energy < best_energy:
                 best_energy, best_strain = trial_energy, trial
             centre = np.asarray(star, dtype=float)
@@ -581,3 +612,8 @@ def optimise_cell_at_pressure(
     )
     volume_per_atom = optimised_structure.get_volume() / len(optimised_structure)
     return optimised_structure, float(volume_per_atom), float(gibbs_per_atom)
+
+
+###
+# Composite workflow for relaxation+free energy
+###
