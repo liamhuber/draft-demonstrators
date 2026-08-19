@@ -4,15 +4,13 @@ import enum
 import itertools
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import ClassVar, NamedTuple
+from typing import NamedTuple
 
 import ase
 import flowrep as fr
 import numpy as np
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
-
-from . import shared, uris
 
 ###
 # Generalise pyiron_workflow.physics.bulk.generate_structures

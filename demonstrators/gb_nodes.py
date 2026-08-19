@@ -4,14 +4,13 @@ import ase
 import flowrep as fr
 import freud
 import numpy as np
-import semantikon
 import structuretoolkit as stk
 from ase import build
 from ase.geometry import cell as ase_cell
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics import structure as structure_mod
 
-from . import shared, uris
+from . import shared
 
 
 @fr.atomic
