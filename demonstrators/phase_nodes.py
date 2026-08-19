@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 import itertools
+import typing
 import warnings
 from collections.abc import Mapping, Sequence
 from typing import NamedTuple
@@ -24,6 +25,8 @@ class StrainMode(enum.StrEnum):
     C = "c"
     C_OVER_A = "c_over_a"
     B_OVER_A = "b_over_a"
+
+    VOLUME_CONSERVING_MODES = enum.nonmember(frozenset({C_OVER_A, B_OVER_A}))
 
     def scales(self, eps: float) -> tuple[float, float, float]:
         f = 1.0 + eps
@@ -54,7 +57,7 @@ class StrainMode(enum.StrEnum):
 
     @property
     def is_volume_conserving(self) -> bool:
-        return self in self.volume_conserving_modes
+        return self in self.VOLUME_CONSERVING_MODES
 
     @classmethod
     def from_sequence(cls, modes: Sequence[str]) -> list[StrainMode]:
@@ -73,9 +76,12 @@ class StrainRange(NamedTuple):
 StrainMap = dict[StrainMode, StrainRange]
 
 
-def _is_plain_range(strain_range: Sequence[float | int]) -> bool:
+def _is_plain_range(
+    strain_range: Sequence[float] | StrainSpec,
+) -> typing.TypeIs[tuple[float, float]]:
+    # a mild lie, it could be some other two-entry sequence
     return (
-        isinstance(strain_range, (tuple, list))
+        isinstance(strain_range, Sequence)
         and len(strain_range) == 2
         and all(isinstance(v, (int, float)) for v in strain_range)
     )
@@ -129,15 +135,13 @@ def generate_structures(
         for combo in itertools.product(*grids)
     ]
 
-    # Guardrails
-    if not _is_plain_range(strain_range):
-        overlap = set(dict(strain_range)) & StrainMode.volume_conserving_modes
-        if overlap:
-            raise ValueError(
-                f"Volume-conserving modes {sorted(overlap)} belong in `shape_modes`, "
-                "not `strain_range`: the outer grid must be the volume axis, and the "
-                "inner relaxation already optimises shape at fixed volume."
-            )
+    overlap = set(spec.keys()) & StrainMode.VOLUME_CONSERVING_MODES
+    if overlap:
+        raise ValueError(
+            f"Volume-conserving modes {tuple(spec.keys())} belong in `shape_modes`, "
+            "not `strain_range`: the outer grid must be the volume axis, and the "
+            "inner relaxation already optimises shape at fixed volume."
+        )
     volumes = np.array([s.get_volume() / len(s) for s in strained_structures])
     if np.any(np.diff(volumes) <= 0):
         raise ValueError(
@@ -174,7 +178,7 @@ def expand_shape_candidates(
         if not mode.is_volume_conserving:
             raise ValueError(
                 f"Shape mode {mode!r} is not volume conserving; legal shape modes "
-                f"are {mode.volume_conserving_modes}. Volume must stay the outer "
+                f"are {mode.VOLUME_CONSERVING_MODES}. Volume must stay the outer "
                 "coordinate or the QHA volume grid is no longer well defined."
             )
     if not modes:
@@ -266,7 +270,8 @@ def static_shape_relaxed_energies(
 
         candidates = list(shape_candidates[i])  # round 0, pre-built by node 2
         labels = list(shape_strains[i])
-        best_energy, best_strain = np.inf, {}
+        best_energy = np.inf
+        best_strain: dict[StrainMode, float] = {}
 
         if not modes:
             best_energy, best_strain = (
@@ -458,7 +463,8 @@ def _relax_shape_at_fixed_volume(
     centre = np.zeros(len(modes))
     window = float(shape_window)
     best_energy, best_strain = np.inf, dict.fromkeys(modes, 0.0)
-    candidates, labels = initial_candidates, initial_strains
+    candidates = initial_candidates
+    labels = initial_strains or []
 
     for round_index in range(max(1, refine_rounds)):
         if round_index > 0 or candidates is None:
@@ -596,8 +602,8 @@ def optimise_cell_at_pressure(
         volumes.append(best_structure.get_volume() / len(best_structure))
         relaxed.append(best_structure)
 
-    energies, volumes = np.asarray(energies), np.asarray(volumes)
-    free_energy = energies.copy()
+    energies_ra, volumes_ra = np.asarray(energies), np.asarray(volumes)
+    free_energy = energies_ra.copy()
 
     if temperature is not None:
         F_TV, _, _ = free_energy_mod.quasiharmonic._harmonic_grid_over_volumes(
@@ -611,8 +617,8 @@ def optimise_cell_at_pressure(
         )
         free_energy = free_energy + F_TV[0, :] / EV_TO_KJ_MOL
 
-    gibbs = free_energy + pressure_ev_per_ang3 * volumes
-    target_volume, gibbs_per_atom = _interior_minimum(volumes, gibbs)
+    gibbs = free_energy + pressure_ev_per_ang3 * volumes_ra
+    target_volume, gibbs_per_atom = _interior_minimum(volumes_ra, gibbs)
 
     # Rebuild at the optimal volume and re-relax the shape there, rather than
     # interpolating a shape strain between grid points.

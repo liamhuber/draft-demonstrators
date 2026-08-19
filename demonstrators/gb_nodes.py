@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 import ase
 import flowrep as fr
@@ -25,7 +25,7 @@ def find_unique_sites(structure: ase.Atoms) -> list[int]:
     # Nonetheless, searching across unique values seems to robustly return results
     # inside the original index count
     metrics = raw_metrics.T
-    seen = {}
+    seen: dict[int, list[float | int]] = {}
     for i, metric in enumerate(metrics):
         new_ = True
         for j, tagged in seen.items():
@@ -164,7 +164,7 @@ def relax_substitution(
 
 @fr.atomic
 def data_at_energy_minima(
-    energies: Iterable[float], volumes: Iterable[float]
+    energies: Sequence[float], volumes: Sequence[float]
 ) -> tuple[float, float]:
     if len(energies) != len(volumes):
         raise ValueError("energies and volumes must be the same length")
@@ -198,7 +198,7 @@ def volumetric_segregation(
     engine: engine_mod.Engine,
     clean_minimize_input: engine_mod.CalcInputMinimize,
     solute_minimize_input: engine_mod.CalcInputMinimize,
-) -> tuple[ase.Atoms, list[int], list[float], list[list[float]]]:
+) -> tuple[ase.Atoms, list[int], list[list[float]], list[list[float]]]:
     bulk_structure, bulk_energy, bulk_sites = get_relaxed_bulk(
         host, bulk_reps, engine, clean_minimize_input
     )
