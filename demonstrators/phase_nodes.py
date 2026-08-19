@@ -13,6 +13,8 @@ import numpy as np
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
 
+from . import shared
+
 ###
 # Generalise pyiron_workflow.physics.bulk.generate_structures
 ###
@@ -641,3 +643,85 @@ def optimise_cell_at_pressure(
 ###
 # Composite workflow for relaxation+free energy
 ###
+
+@fr.workflow
+def qha(
+    *,
+    # Model
+    engine: engine_mod.Engine,
+    # Physics
+    structure: ase.Atoms,
+    temperatures: Sequence[float] = (
+        0.0,
+        100.0,
+        200.0,
+        300.0,
+        400.0,
+        500.0,
+        600.0,
+        700.0,
+        800.0,
+    ),
+    pressure: float = 0.0,
+    # Volumetric strains
+    strain_range: StrainSpec = (-0.03, 0.03),
+    num_points: int = 7,
+    # Shape search
+    shape_modes: Sequence[StrainMode] = (),
+    shape_window: float = 0.06,
+    num_shape_points: int = 5,
+    shape_refine_rounds: int = 2,
+    # Phonopy
+    eos_type: str = "vinet",
+    force_constant_supercell_repetitions: tuple[int, int, int] = (2, 2, 2),
+    displacement_distance: float = 0.03,
+    is_plusminus="auto",
+    # Data management
+    working_directory: str = ".",
+    subdir: str = "quasiharmonic_free_energy",
+    keep_handles: bool = False,
+) -> free_energy_mod.FreeEnergyOutput:
+    static_input = engine_mod.CalcInputStatic()
+    static_engine = shared.with_calc_input(engine=engine, calc_input=static_input)
+    relaxation_subdir = fr.std.add(subdir, "/relax_structure")
+    _, relaxation_engine = free_energy_mod.harmonic._resolve_simfolder(
+        engine=static_engine,
+        working_directory=working_directory,
+        subdir=relaxation_subdir
+    )
+    eye = np.eye(3)
+    fc2_supercell_matrix = fr.std.mul(force_constant_supercell_repetitions, eye)
+    avg_temp = np.mean(temperatures)
+    relaxed_structure, _, _ = optimise_cell_at_pressure(
+        structure=structure,
+        engine=relaxation_engine,
+        pressure=pressure,
+        temperature=avg_temp,
+        fc2_supercell_matrix=fc2_supercell_matrix,
+        num_points=num_points,
+        shape_modes=shape_modes,
+        shape_window=shape_window,
+        num_shape_points=num_shape_points,
+        shape_refine_rounds=shape_refine_rounds,
+        displacement_distance=displacement_distance,
+        is_plusminus=is_plusminus,
+        working_directory=working_directory,
+    )
+    qha_output = quasiharmonic_free_energy(
+        structure=relaxed_structure,
+        engine=static_engine,
+        fc2_supercell_matrix=fc2_supercell_matrix,
+        temperatures=temperatures,
+        pressure=pressure,
+        strain_range=strain_range,
+        num_points=num_points,
+        shape_modes=shape_modes,
+        shape_window=shape_window,
+        num_shape_points=num_shape_points,
+        shape_refine_rounds=shape_refine_rounds,
+        eos_type=eos_type,
+        working_directory=working_directory,
+        subdir=subdir,
+        keep_handles=keep_handles,
+    )
+    return qha_output
