@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import enum
 import itertools
 import warnings
 from collections.abc import Mapping, Sequence
+from typing import ClassVar, NamedTuple
 
 import ase
 import flowrep as fr
@@ -24,38 +27,55 @@ class StrainMode(enum.StrEnum):
     C_OVER_A = "c_over_a"
     B_OVER_A = "b_over_a"
 
+    def scales(self, eps: float) -> tuple[float, float, float]:
+        f = 1.0 + eps
+        match self:
+            case StrainMode.ISO:
+                return (f, f, f)
+            case StrainMode.A:
+                return (f, 1.0, 1.0)
+            case StrainMode.B:
+                return (1.0, f, 1.0)
+            case StrainMode.C:
+                return (1.0, 1.0, f)
+            case (
+                StrainMode.C_OVER_A
+            ):  # c up by f, a and b down by sqrt(f): volume conserving
+                g = f ** (-0.5)
+                return (g, g, f)
+            case StrainMode.B_OVER_A:  # b up by f, a down by f: volume conserving
+                return (1.0 / f, f, 1.0)
+            case _:  # pragma: no cover
+                raise ValueError(
+                    f"Unknown strain mode {self!r}; expected one of {[m.value for m in StrainMode]}."
+                )
+
+    @property
+    def volume_conserving_modes(self) -> frozenset[StrainMode]:
+        return frozenset({StrainMode.C_OVER_A, StrainMode.B_OVER_A})
+
+    @property
+    def is_volume_conserving(self) -> bool:
+        return self in self.volume_conserving_modes
+
+    @classmethod
+    def from_sequence(cls, modes: Sequence[str]) -> list[StrainMode]:
+        return [StrainMode(m) for m in modes]
+
 
 StrainSpec = tuple[float, float] | Mapping[StrainMode, Sequence[float]]
 
-VOLUME_CONSERVING_MODES = frozenset({StrainMode.C_OVER_A, StrainMode.B_OVER_A})
+
+class StrainRange(NamedTuple):
+    lo: float
+    hi: float
+    n: int
 
 
-def _mode_scales(mode: StrainMode, eps: float) -> tuple[float, float, float]:
-    """Per-lattice-vector scale factors for one strain mode at magnitude ``eps``."""
-    f = 1.0 + eps
-    match mode:
-        case StrainMode.ISO:
-            return (f, f, f)
-        case StrainMode.A:
-            return (f, 1.0, 1.0)
-        case StrainMode.B:
-            return (1.0, f, 1.0)
-        case StrainMode.C:
-            return (1.0, 1.0, f)
-        case (
-            StrainMode.C_OVER_A
-        ):  # c up by f, a and b down by sqrt(f): volume conserving
-            g = f ** (-0.5)
-            return (g, g, f)
-        case StrainMode.B_OVER_A:  # b up by f, a down by f: volume conserving
-            return (1.0 / f, f, 1.0)
-        case _:
-            raise ValueError(
-                f"Unknown strain mode {mode!r}; expected one of {[m.value for m in StrainMode]}."
-            )
+StrainMap = dict[StrainMode, StrainRange]
 
 
-def _is_plain_range(strain_range) -> bool:
+def _is_plain_range(strain_range: Sequence[float | int]) -> bool:
     return (
         isinstance(strain_range, (tuple, list))
         and len(strain_range) == 2
@@ -63,12 +83,12 @@ def _is_plain_range(strain_range) -> bool:
     )
 
 
-def _normalise_spec(strain_range, num_points) -> dict[str, tuple[float, float, int]]:
+def _normalise_spec(strain_range, num_points) -> StrainMap:
     """Polymorphic spec -> ``{mode: (lo, hi, n)}``."""
     if _is_plain_range(strain_range):
         lo, hi = strain_range
-        return {"iso": (float(lo), float(hi), int(num_points))}
-    spec = {}
+        return {StrainMode.ISO: StrainRange(float(lo), float(hi), int(num_points))}
+    spec: StrainMap = {}
     for mode, values in dict(strain_range).items():
         vals = tuple(values)
         if len(vals) not in (2, 3):
@@ -76,15 +96,15 @@ def _normalise_spec(strain_range, num_points) -> dict[str, tuple[float, float, i
                 f"strain spec for {mode!r} must be (lo, hi) or (lo, hi, num); got {vals!r}"
             )
         n = int(vals[2]) if len(vals) == 3 else int(num_points)
-        spec[str(mode)] = (float(vals[0]), float(vals[1]), n)
+        spec[StrainMode(mode)] = StrainRange(float(vals[0]), float(vals[1]), n)
     return spec
 
 
-def apply_strains(base: ase.Atoms, strains: Mapping[str, float]) -> ase.Atoms:
+def apply_strains(base: ase.Atoms, strains: Mapping[StrainMode, float]) -> ase.Atoms:
     """Apply a composition of named strain modes to ``base``'s cell."""
     scales = np.ones(3, dtype=float)
     for mode, eps in strains.items():
-        scales *= np.asarray(_mode_scales(mode, float(eps)), dtype=float)
+        scales *= np.asarray(mode.scales(float(eps)), dtype=float)
     strained = base.copy()
     strained.set_cell(
         np.asarray(strained.get_cell()) * scales[:, None], scale_atoms=True
@@ -113,7 +133,7 @@ def generate_structures(
 
     # Guardrails
     if not _is_plain_range(strain_range):
-        overlap = set(dict(strain_range)) & VOLUME_CONSERVING_MODES
+        overlap = set(dict(strain_range)) & StrainMode.volume_conserving_modes
         if overlap:
             raise ValueError(
                 f"Volume-conserving modes {sorted(overlap)} belong in `shape_modes`, "
@@ -138,7 +158,7 @@ def generate_structures(
 @fr.atomic("shape_candidates", "shape_strains")
 def expand_shape_candidates(
     structures: list[ase.Atoms],
-    shape_modes: Sequence[str] = (),
+    shape_modes: Sequence[StrainMode] = (),
     shape_window: float = 0.06,
     num_shape_points: int = 5,
 ):
@@ -151,12 +171,12 @@ def expand_shape_candidates(
     With ``shape_modes=()`` each group is the single input cell and the whole
     downstream path collapses to the legacy behaviour.
     """
-    modes = list(shape_modes)
+    modes = StrainMode.from_sequence(shape_modes)
     for mode in modes:
-        if mode not in VOLUME_CONSERVING_MODES:
+        if not mode.is_volume_conserving:
             raise ValueError(
                 f"Shape mode {mode!r} is not volume conserving; legal shape modes "
-                f"are {sorted(VOLUME_CONSERVING_MODES)}. Volume must stay the outer "
+                f"are {mode.volume_conserving_modes}. Volume must stay the outer "
                 "coordinate or the QHA volume grid is no longer well defined."
             )
     if not modes:
@@ -229,7 +249,7 @@ def static_shape_relaxed_energies(
     shape_candidates: list[list[ase.Atoms]],
     shape_strains: list[list[dict]],
     engine: engine_mod.Engine,
-    shape_modes: Sequence[str] = (),
+    shape_modes: Sequence[StrainMode] = (),
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     refine_rounds: int = 2,
@@ -240,7 +260,7 @@ def static_shape_relaxed_energies(
     first two feed ``_fit_qha`` on the per-atom basis it needs; the third feeds
     ``_harmonic_grid_over_volumes`` so phonons run on the *relaxed* path.
     """
-    modes = list(shape_modes)
+    modes = StrainMode.from_sequence(shape_modes)
     energies, volumes, relaxed = [], [], []
 
     for i, base in enumerate(structures):
@@ -316,7 +336,7 @@ def quasiharmonic_free_energy(
     pressure: float = 0.0,
     strain_range: StrainSpec = (-0.03, 0.03),
     num_points: int = 7,
-    shape_modes: Sequence[str] = (),
+    shape_modes: Sequence[StrainMode] = (),
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     shape_refine_rounds: int = 2,
@@ -418,7 +438,7 @@ def _relax_shape_at_fixed_volume(
     base: ase.Atoms,
     engine: engine_mod.Engine,
     tag: str,
-    shape_modes: Sequence[str],
+    shape_modes: Sequence[StrainMode],
     shape_window: float,
     num_shape_points: int,
     refine_rounds: int,
@@ -432,7 +452,7 @@ def _relax_shape_at_fixed_volume(
     ``(relaxed_structure, energy_per_atom)``; with no shape modes this is one
     evaluation of ``base``.
     """
-    modes = list(shape_modes)
+    modes = StrainMode.from_sequence(shape_modes)
     counter = itertools.count()
     if not modes:
         return base, _evaluate_shape(base, engine, tag, counter)
@@ -525,7 +545,7 @@ def optimise_cell_at_pressure(
     fc2_supercell_matrix=None,
     scan_range: tuple[float, float] = (-0.06, 0.08),
     num_points: int = 7,
-    shape_modes: Sequence[str] = (),
+    shape_modes: Sequence[StrainMode] = (),
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     shape_refine_rounds: int = 2,
