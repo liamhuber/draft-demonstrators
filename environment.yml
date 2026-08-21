@@ -2,8 +2,18 @@ channels:
   - conda-forge
 dependencies:
   - python>=3.11,<3.14
+  - aimsgb
   - flowrep >=0.6.2,<0.7.0
-  - pyiron_workflow >=0.19.0,<0.20.0
+  - freud >=3.5.0,<3.6.0
+  - numpy
   - pandas >=3.0.5,<3.1.0
+  - pyiron_snippets >=1.5.0,<2.0.0  # Need 1.5.0's ability to handle ase.build.bulk.bulk
+  - pyiron_workflow >=0.19.0,<0.20.0
+  - pyiron_workflow_atomistics >=0.2.1,<0.3.0
+  - pymatgen
+  - pyscal
+  - rdflib >=7.6.0,<7.7.0
+  - structuretoolkit
+  - pip
   - pip:
     - lz-GB-code==0.1.0
