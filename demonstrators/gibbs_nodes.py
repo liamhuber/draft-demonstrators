@@ -127,7 +127,7 @@ class GibbsResult:
     the phase it is compared with.
     """
 
-    temperatures: np.ndarray  # (n_temperature,)
+    temperatures: Sequence[float]  # (n_temperature,)
     pressure: float  # GPa
     gibbs: np.ndarray  # (n_temperature,) eV/atom
     optimal_volumes: np.ndarray  # (n_temperature,) Å³/atom
@@ -145,8 +145,8 @@ class GibbsResult:
 class GibbsSweep:
     """G(T, P) for one phase over a pressure sweep."""
 
-    temperatures: np.ndarray  # (n_temperature,)
-    pressures: np.ndarray  # (n_pressure,)
+    temperatures: Sequence[float]  # (n_temperature,)
+    pressures: Sequence[float]  # (n_pressure,)
     gibbs: np.ndarray  # (n_temperature, n_pressure) eV/atom
     optimal_volumes: np.ndarray  # (n_temperature, n_pressure) Å³/atom
     results: list[GibbsResult]
@@ -482,9 +482,8 @@ def gibbs_iteration(
         strain_range=tuple(strain_range),
         num_points=num_points,
     )
-    temperature_array = np.asarray(temperatures, dtype=float)
     n_volume = len(scan_structures)
-    n_temperature = temperature_array.size
+    n_temperature = len(temperatures)
 
     volumes = np.empty(n_volume)
     free_energies = np.empty((n_volume, n_temperature))
@@ -494,7 +493,7 @@ def gibbs_iteration(
         scan = shape_scan_at_volume(
             scan_structure,
             engine,
-            temperatures=temperature_array,
+            temperatures=temperatures,
             fc2_supercell_matrix=fc2_supercell_matrix,
             shape_mode=shape_mode,
             shape_window=shape_window,
@@ -731,7 +730,6 @@ def gibbs_at_pressure(
     the volume grid would not fix it and would only re-run an expensive grid
     for no reason.
     """
-    temperature_array = np.asarray(temperatures, dtype=float)
     base_directory = os.path.abspath(os.path.join(working_directory, tag))
     os.makedirs(base_directory, exist_ok=True)
 
@@ -754,7 +752,7 @@ def gibbs_at_pressure(
                 seed,
                 engine,
                 pressure=pressure,
-                temperatures=temperature_array,
+                temperatures=temperatures,
                 fc2_supercell_matrix=fc2_supercell_matrix,
                 strain_range=current_range,
                 num_points=num_points,
@@ -826,7 +824,7 @@ def gibbs_at_pressure(
 
     last = iterations[-1]
     return GibbsResult(
-        temperatures=temperature_array,
+        temperatures=temperatures,
         pressure=float(pressure),
         gibbs=last.gibbs,
         optimal_volumes=last.optimal_volumes,
@@ -911,9 +909,7 @@ def gibbs_over_pressures(
     drift. Check ``result.fit_residual`` alongside ``result.converged`` for every
     pressure in the sweep.
     """
-    pressure_array = np.asarray(pressures, dtype=float)
     pressure_tags = _pressure_tags(tag, pressures)
-    temperature_array = np.asarray(temperatures, dtype=float)
     results: list[GibbsResult] = []
     for pressure, pressure_tag in zip(pressures, pressure_tags):
         results.append(
@@ -921,7 +917,7 @@ def gibbs_over_pressures(
                 structure,
                 engine,
                 pressure=float(pressure),
-                temperatures=temperature_array,
+                temperatures=temperatures,
                 supercell_target_length=supercell_target_length,
                 strain_range=strain_range,
                 num_points=num_points,
@@ -939,8 +935,8 @@ def gibbs_over_pressures(
             )
         )
     return GibbsSweep(
-        temperatures=temperature_array,
-        pressures=pressure_array,
+        temperatures=temperatures,
+        pressures=pressures,
         gibbs=np.column_stack([result.gibbs for result in results]),
         optimal_volumes=np.column_stack([result.optimal_volumes for result in results]),
         results=results,
@@ -972,12 +968,12 @@ def phase_boundary(sweep_a: GibbsSweep, sweep_b: GibbsSweep) -> np.ndarray:
     if not np.allclose(sweep_a.pressures, sweep_b.pressures):
         raise ValueError(
             "Both sweeps must share a pressure grid; got "
-            f"{sweep_a.pressures.tolist()} and {sweep_b.pressures.tolist()}."
+            f"{sweep_a.pressures} and {sweep_b.pressures}."
         )
     if not np.allclose(sweep_a.temperatures, sweep_b.temperatures):
         raise ValueError(
             "Both sweeps must share a temperature grid; got "
-            f"{sweep_a.temperatures.tolist()} and {sweep_b.temperatures.tolist()}."
+            f"{sweep_a.temperatures} and {sweep_b.temperatures}."
         )
     delta = sweep_a.gibbs - sweep_b.gibbs
     pressures = sweep_a.pressures
