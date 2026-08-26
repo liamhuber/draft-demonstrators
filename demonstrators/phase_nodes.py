@@ -644,6 +644,7 @@ def optimise_cell_at_pressure(
 # Composite workflow for relaxation+free energy
 ###
 
+
 @fr.workflow
 def qha(
     *,
@@ -687,7 +688,7 @@ def qha(
     _, relaxation_engine = free_energy_mod.harmonic._resolve_simfolder(
         engine=static_engine,
         working_directory=working_directory,
-        subdir=relaxation_subdir
+        subdir=relaxation_subdir,
     )
     eye = np.eye(3)
     fc2_supercell_matrix = fr.std.mul(force_constant_supercell_repetitions, eye)
