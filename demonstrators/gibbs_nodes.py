@@ -36,6 +36,8 @@ from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
 
 from . import phase_nodes
 
+_MAX_TAG_DECIMALS = 24
+
 ShapeObjective = Literal["free_energy", "static"]
 """
 Used to determine whether shape optimization at a fixed volume is perfomed with 
@@ -839,6 +841,42 @@ def gibbs_at_pressure(
     )
 
 
+def _format_pressure(pressure: float, decimals: int, int_width: int) -> str:
+    sign = "n" if pressure < 0 else ""
+    width = int_width + 1 + decimals
+    body = f"{abs(pressure):0{width}.{decimals}f}".replace(".", "_")
+    return f"p_{sign}{body}"
+
+
+def _pressure_tags(tag: str, pressures: Sequence[float]) -> list[str]:
+    """Build one filesystem-safe tag component per pressure.
+
+    Decimal precision is the smallest that keeps every tag distinct. Integer
+    parts are zero-padded to a common width so the tags sort lexicographically.
+    """
+    if not pressures:
+        return []
+
+    for pressure in pressures:
+        if not math.isfinite(pressure):
+            raise ValueError(f"pressures must all be finite, got {pressure}")
+
+    if len(set(pressures)) != len(pressures):
+        raise ValueError(f"pressures contains duplicate values: {pressures}")
+
+    int_width = max(len(f"{abs(pressure):.0f}") for pressure in pressures)
+
+    for decimals in range(1, _MAX_TAG_DECIMALS + 1):
+        tags = [f"{tag}/{_format_pressure(p, decimals, int_width)}" for p in pressures]
+        if len(set(tags)) == len(tags):
+            return tags
+
+    raise ValueError(
+        f"pressures are not separable within {_MAX_TAG_DECIMALS} decimals: "
+        f"{pressures}"
+    )
+
+
 def gibbs_over_pressures(
     structure: ase.Atoms,
     engine: engine_mod.Engine,
@@ -874,9 +912,10 @@ def gibbs_over_pressures(
     pressure in the sweep.
     """
     pressure_array = np.asarray(pressures, dtype=float)
+    pressure_tags = _pressure_tags(tag, pressures)
     temperature_array = np.asarray(temperatures, dtype=float)
     results: list[GibbsResult] = []
-    for index, pressure in enumerate(pressure_array):
+    for pressure, pressure_tag in zip(pressures, pressure_tags):
         results.append(
             gibbs_at_pressure(
                 structure,
@@ -896,7 +935,7 @@ def gibbs_over_pressures(
                 max_iterations=max_iterations,
                 gibbs_tolerance=gibbs_tolerance,
                 working_directory=working_directory,
-                tag=f"{tag}/p_{index:02d}",
+                tag=pressure_tag,
             )
         )
     return GibbsSweep(
