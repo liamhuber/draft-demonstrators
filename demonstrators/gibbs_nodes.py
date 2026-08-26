@@ -30,6 +30,7 @@ from collections.abc import Sequence
 from typing import Literal
 
 import ase
+import flowrep as fr
 import numpy as np
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
@@ -141,7 +142,7 @@ class GibbsResult:
     displacement_distance: float  # Å
 
 
-@dataclasses.dataclass(frozen=True)
+@fr.dataclass(frozen=True)
 class GibbsSweep:
     """G(T, P) for one phase over a pressure sweep."""
 
@@ -875,6 +876,7 @@ def _pressure_tags(tag: str, pressures: Sequence[float]) -> list[str]:
     )
 
 
+@fr.workflow
 def gibbs_over_pressures(
     structure: ase.Atoms,
     engine: engine_mod.Engine,
@@ -910,37 +912,45 @@ def gibbs_over_pressures(
     pressure in the sweep.
     """
     pressure_tags = _pressure_tags(tag, pressures)
+
     results: list[GibbsResult] = []
+    gibbs_results: list[np.ndarray] = []
+    volume_results: list[np.ndarray] = []
     for pressure, pressure_tag in zip(pressures, pressure_tags):
-        results.append(
-            gibbs_at_pressure(
-                structure,
-                engine,
-                pressure=float(pressure),
-                temperatures=temperatures,
-                supercell_target_length=supercell_target_length,
-                strain_range=strain_range,
-                num_points=num_points,
-                fit_degree=fit_degree,
-                shape_mode=shape_mode,
-                shape_window=shape_window,
-                num_shape_points=num_shape_points,
-                shape_objective=shape_objective,
-                displacement_distance=displacement_distance,
-                is_plusminus=is_plusminus,
-                max_iterations=max_iterations,
-                gibbs_tolerance=gibbs_tolerance,
-                working_directory=working_directory,
-                tag=pressure_tag,
-            )
+        result = gibbs_at_pressure(
+            structure,
+            engine,
+            pressure=pressure,
+            temperatures=temperatures,
+            supercell_target_length=supercell_target_length,
+            strain_range=strain_range,
+            num_points=num_points,
+            fit_degree=fit_degree,
+            shape_mode=shape_mode,
+            shape_window=shape_window,
+            num_shape_points=num_shape_points,
+            shape_objective=shape_objective,
+            displacement_distance=displacement_distance,
+            is_plusminus=is_plusminus,
+            max_iterations=max_iterations,
+            gibbs_tolerance=gibbs_tolerance,
+            working_directory=working_directory,
+            tag=pressure_tag,
         )
-    return GibbsSweep(
+        results.append(result)
+        gibbs_results.append(result.gibbs)
+        volume_results.append(result.optimal_volumes)
+
+    gibbs = np.column_stack(gibbs_results)
+    optimal_volumes = np.column_stack(volume_results)
+    gibbs_sweep = GibbsSweep(
         temperatures=temperatures,
         pressures=pressures,
-        gibbs=np.column_stack([result.gibbs for result in results]),
-        optimal_volumes=np.column_stack([result.optimal_volumes for result in results]),
+        gibbs=gibbs,
+        optimal_volumes=optimal_volumes,
         results=results,
     )
+    return gibbs_sweep
 
 
 def phase_boundary(sweep_a: GibbsSweep, sweep_b: GibbsSweep) -> np.ndarray:
