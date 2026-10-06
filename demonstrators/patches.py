@@ -1,3 +1,5 @@
+import importlib
+
 from ase.calculators import eam, emt
 
 
@@ -61,3 +63,46 @@ class JSONableEMT(emt.EMT, dict):
 
     def __bool__(self):
         return True
+
+
+class JSONableClass(dict):
+    """
+    Classes (e.g. `ASEEngine.optimizer_class`) aren't JSON serializable -- patch that.
+
+    Wraps a class in a `dict` holding its import path; calling the wrapper instantiates
+    the wrapped class.
+    """
+
+    def __init__(self, cls_or_items):
+        # dataclasses.asdict rebuilds dict subclasses as `type(obj)(items)`
+        if isinstance(cls_or_items, type):
+            path = f"{cls_or_items.__module__}.{cls_or_items.__qualname__}"
+        else:
+            path = dict(cls_or_items)["class"]
+        super().__init__({"class": path})
+        self.cls = _import_from_path(path)
+
+    def __call__(self, *args, **kwargs):
+        return self.cls(*args, **kwargs)
+
+    def __hash__(self):
+        return hash(self["class"])
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self['class']})"
+
+
+def _import_from_path(path):
+    module_name, _, qualname = path.rpartition(".")
+    while module_name:
+        try:
+            obj = importlib.import_module(module_name)
+            break
+        except ModuleNotFoundError:
+            module_name, _, outer = module_name.rpartition(".")
+            qualname = f"{outer}.{qualname}"
+    else:
+        raise ImportError(f"Could not import {path}")
+    for attr in qualname.split("."):
+        obj = getattr(obj, attr)
+    return obj
