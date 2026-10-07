@@ -23,11 +23,14 @@ Everything here is in eV/atom and Å³/atom. See
 from __future__ import annotations
 
 import dataclasses
+import enum
+import itertools
 import math
 import os
+import typing
 import warnings
-from collections.abc import Sequence
-from typing import Literal
+from collections.abc import Mapping, Sequence
+from typing import Literal, NamedTuple
 
 import ase
 import flowrep as fr
@@ -35,7 +38,189 @@ import numpy as np
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
 
-from . import phase_nodes
+###
+# Generalise pyiron_workflow.physics.bulk.generate_structures
+###
+
+
+class StrainMode(enum.StrEnum):
+    ISO = "iso"
+    A = "a"
+    B = "b"
+    C = "c"
+    C_OVER_A = "c_over_a"
+    B_OVER_A = "b_over_a"
+
+    VOLUME_CONSERVING_MODES = enum.nonmember(frozenset({C_OVER_A, B_OVER_A}))
+
+    def scales(self, eps: float) -> tuple[float, float, float]:
+        f = 1.0 + eps
+        match self:
+            case StrainMode.ISO:
+                return (f, f, f)
+            case StrainMode.A:
+                return (f, 1.0, 1.0)
+            case StrainMode.B:
+                return (1.0, f, 1.0)
+            case StrainMode.C:
+                return (1.0, 1.0, f)
+            case (
+                StrainMode.C_OVER_A
+            ):  # c up by f, a and b down by sqrt(f): volume conserving
+                g = f ** (-0.5)
+                return (g, g, f)
+            case StrainMode.B_OVER_A:  # b up by f, a down by f: volume conserving
+                return (1.0 / f, f, 1.0)
+            case _:  # pragma: no cover
+                raise ValueError(
+                    f"Unknown strain mode {self!r}; expected one of {[m.value for m in StrainMode]}."
+                )
+
+    @property
+    def volume_conserving_modes(self) -> frozenset[StrainMode]:
+        return frozenset({StrainMode.C_OVER_A, StrainMode.B_OVER_A})
+
+    @property
+    def is_volume_conserving(self) -> bool:
+        return self in self.VOLUME_CONSERVING_MODES
+
+    @classmethod
+    def from_sequence(cls, modes: Sequence[str]) -> list[StrainMode]:
+        return [StrainMode(m) for m in modes]
+
+
+StrainSpec = tuple[float, float] | Mapping[StrainMode, Sequence[float]]
+
+
+class StrainRange(NamedTuple):
+    lo: float
+    hi: float
+    n: int
+
+
+StrainMap = dict[StrainMode, StrainRange]
+
+
+def _is_plain_range(
+    strain_range: Sequence[float] | StrainSpec,
+) -> typing.TypeIs[tuple[float, float]]:
+    # a mild lie, it could be some other two-entry sequence
+    return (
+        isinstance(strain_range, Sequence)
+        and len(strain_range) == 2
+        and all(isinstance(v, (int, float)) for v in strain_range)
+    )
+
+
+def _normalise_spec(strain_range, num_points) -> StrainMap:
+    """Polymorphic spec -> ``{mode: (lo, hi, n)}``."""
+    if _is_plain_range(strain_range):
+        lo, hi = strain_range
+        return {StrainMode.ISO: StrainRange(float(lo), float(hi), int(num_points))}
+    spec: StrainMap = {}
+    for mode, values in dict(strain_range).items():
+        vals = tuple(values)
+        if len(vals) not in (2, 3):
+            raise ValueError(
+                f"strain spec for {mode!r} must be (lo, hi) or (lo, hi, num); got {vals!r}"
+            )
+        n = int(vals[2]) if len(vals) == 3 else int(num_points)
+        spec[StrainMode(mode)] = StrainRange(float(vals[0]), float(vals[1]), n)
+    return spec
+
+
+def apply_strains(base: ase.Atoms, strains: Mapping[StrainMode, float]) -> ase.Atoms:
+    """Apply a composition of named strain modes to ``base``'s cell."""
+    scales = np.ones(3, dtype=float)
+    for mode, eps in strains.items():
+        scales *= np.asarray(mode.scales(float(eps)), dtype=float)
+    strained = base.copy()
+    strained.set_cell(
+        np.asarray(strained.get_cell()) * scales[:, None], scale_atoms=True
+    )
+    return strained
+
+
+@fr.atomic("structure_list")
+def generate_structures(
+    base_structure: ase.Atoms,
+    strain_range: StrainSpec = (-0.03, 0.03),
+    num_points: int = 7,
+) -> list[ase.Atoms]:
+    """Strained cells over an arbitrary product grid of named strain modes.
+
+    ``strain_range=(-0.03, 0.03)`` reproduces the legacy ``axes=["iso"]`` path
+    cell-for-cell. ``{"a": (-0.02, 0.02), "c": (-0.02, 0.02)}`` gives the 2-D grid.
+    """
+    spec = _normalise_spec(strain_range, num_points)
+    modes = list(spec)
+    grids = [np.linspace(*spec[mode]) for mode in modes]
+    strained_structures = [
+        apply_strains(base_structure, dict(zip(modes, combo)))
+        for combo in itertools.product(*grids)
+    ]
+
+    overlap = set(spec.keys()) & StrainMode.VOLUME_CONSERVING_MODES
+    if overlap:
+        raise ValueError(
+            f"Volume-conserving modes {tuple(spec.keys())} belong in `shape_modes`, "
+            "not `strain_range`: the outer grid must be the volume axis, and the "
+            "inner relaxation already optimises shape at fixed volume."
+        )
+    volumes = np.array([s.get_volume() / len(s) for s in strained_structures])
+    if np.any(np.diff(volumes) <= 0):
+        raise ValueError(
+            f"`strain_range` must produce a strictly increasing volume grid; got "
+            f"{volumes.tolist()} Å³/atom. Multi-axis outer specs generally will not."
+        )
+
+    return strained_structures
+
+
+GPA_PER_EV_PER_ANG3 = 160.21766208
+
+
+def _interior_minimum(x, y, degree: int | None = None) -> tuple[float, float]:
+    """Polynomial-fit ``y(x)``; return ``(x_min, y_min)`` for the interior minimum.
+
+    Raises if the minimum sits on a grid edge — the scan window does not bracket
+    it and any answer would be extrapolation.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if degree is None:
+        degree = int(min(4, max(2, x.size - 2)))
+
+    coefficients = np.polyfit(x, y, degree)
+    derivative = np.polyder(coefficients)
+    curvature = np.polyder(derivative)
+    lo, hi = float(x.min()), float(x.max())
+
+    interior = [
+        float(r.real)
+        for r in np.roots(derivative)
+        if abs(r.imag) < 1e-9
+        and lo < r.real < hi
+        and np.polyval(curvature, r.real) > 0.0
+    ]
+    if not interior:
+        argmin = int(np.argmin(y))
+        raise RuntimeError(
+            "No interior minimum in the scan window: sampled minimum sits at "
+            f"x={x[argmin]:.4f} (window {lo:.4f}..{hi:.4f}). Widen `scan_range`, or "
+            f"shift it toward {'larger' if argmin == x.size - 1 else 'smaller'} values."
+        )
+    best = min(interior, key=lambda r: float(np.polyval(coefficients, r)))
+    best_value = float(np.polyval(coefficients, best))
+
+    if min(best - lo, hi - best) < 0.05 * (hi - lo):
+        warnings.warn(
+            f"Optimum x={best:.4f} lies within 5% of the scan edge ({lo:.4f}..{hi:.4f}); "
+            "the fit is near-extrapolating. Widen `scan_range`.",
+            stacklevel=2,
+        )
+    return best, best_value
+
 
 _MAX_TAG_DECIMALS = 24
 
@@ -275,7 +460,7 @@ def shape_scan_at_volume(
     *,
     temperatures: Sequence[float],
     fc2_supercell_matrix,
-    shape_mode: phase_nodes.StrainMode | None = None,
+    shape_mode: StrainMode | None = None,
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
@@ -303,11 +488,11 @@ def shape_scan_at_volume(
             f"shape_objective must be 'free_energy' or 'static'; got {shape_objective!r}"
         )
     if shape_mode is not None:
-        shape_mode = phase_nodes.StrainMode(shape_mode)
+        shape_mode = StrainMode(shape_mode)
         if not shape_mode.is_volume_conserving:
             raise ValueError(
                 f"shape_mode {shape_mode!r} is not volume conserving; legal modes are "
-                f"{phase_nodes.StrainMode.VOLUME_CONSERVING_MODES}. Volume must remain "
+                f"{StrainMode.VOLUME_CONSERVING_MODES}. Volume must remain "
                 "the outer coordinate or the volume grid is no longer well defined."
             )
 
@@ -317,8 +502,7 @@ def shape_scan_at_volume(
     else:
         strains = np.linspace(-shape_window, shape_window, num_shape_points)
         structures = [
-            phase_nodes.apply_strains(structure, {shape_mode: float(strain)})
-            for strain in strains
+            apply_strains(structure, {shape_mode: float(strain)}) for strain in strains
         ]
 
     static_energies = np.array(
@@ -354,7 +538,7 @@ def shape_scan_at_volume(
         best_structure = (
             structure.copy()
             if shape_mode is None
-            else phase_nodes.apply_strains(structure, {shape_mode: best_strain})
+            else apply_strains(structure, {shape_mode: best_strain})
         )
         row = _vibrational_free_energy(
             best_structure,
@@ -442,7 +626,7 @@ def gibbs_iteration(
     strain_range: tuple[float, float] = (-0.04, 0.04),
     num_points: int = 7,
     fit_degree: int = 3,
-    shape_mode: phase_nodes.StrainMode | None = None,
+    shape_mode: StrainMode | None = None,
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
@@ -478,7 +662,7 @@ def gibbs_iteration(
             "underdetermined, and its 'interior minimum' would be an artefact of "
             "the fit rather than a property of the energy surface."
         )
-    scan_structures = phase_nodes.generate_structures(
+    scan_structures = generate_structures(
         base_structure=structure,
         strain_range=tuple(strain_range),
         num_points=num_points,
@@ -511,7 +695,7 @@ def gibbs_iteration(
         shape_strains[index] = optimum.optimal_strains
         shape_fell_back[index] = optimum.fell_back
 
-    pressure_ev_per_ang3 = float(pressure) / phase_nodes.GPA_PER_EV_PER_ANG3
+    pressure_ev_per_ang3 = float(pressure) / GPA_PER_EV_PER_ANG3
     shape_degree = int(min(2, max(1, n_volume - 2)))
 
     gibbs = np.empty(n_temperature)
@@ -521,9 +705,7 @@ def gibbs_iteration(
     for index in range(n_temperature):
         gibbs_grid = free_energies[:, index] + pressure_ev_per_ang3 * volumes
         try:
-            volume, energy = phase_nodes._interior_minimum(
-                volumes, gibbs_grid, degree=fit_degree
-            )
+            volume, energy = _interior_minimum(volumes, gibbs_grid, degree=fit_degree)
         except RuntimeError as error:
             raise BracketError(str(error)) from error
         optimal_volumes[index] = volume
@@ -566,7 +748,7 @@ def recentre(
     structure: ase.Atoms,
     iteration: GibbsIteration,
     *,
-    shape_mode: phase_nodes.StrainMode | None = None,
+    shape_mode: StrainMode | None = None,
     max_strain: float = MAX_BRACKET_STRAIN,
 ) -> tuple[ase.Atoms, tuple[float, float]]:
     """Next seed structure and strain range, centred on the volumes just found.
@@ -605,11 +787,11 @@ def recentre(
     floor.
     """
     if shape_mode is not None:
-        shape_mode = phase_nodes.StrainMode(shape_mode)
+        shape_mode = StrainMode(shape_mode)
         if not shape_mode.is_volume_conserving:
             raise ValueError(
                 f"shape_mode {shape_mode!r} is not volume conserving; legal modes are "
-                f"{phase_nodes.StrainMode.VOLUME_CONSERVING_MODES}. Volume must remain "
+                f"{StrainMode.VOLUME_CONSERVING_MODES}. Volume must remain "
                 "the outer coordinate or the volume grid is no longer well defined."
             )
 
@@ -621,7 +803,7 @@ def recentre(
     seed.set_cell(np.asarray(seed.get_cell()) * scale, scale_atoms=True)
     if shape_mode is not None:
         middle = iteration.optimal_shape_strains.size // 2
-        seed = phase_nodes.apply_strains(
+        seed = apply_strains(
             seed, {shape_mode: float(iteration.optimal_shape_strains[middle])}
         )
 
@@ -666,7 +848,7 @@ def gibbs_at_pressure(
     strain_range: tuple[float, float] = (-0.04, 0.04),
     num_points: int = 7,
     fit_degree: int = 3,
-    shape_mode: phase_nodes.StrainMode | None = None,
+    shape_mode: StrainMode | None = None,
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
@@ -887,7 +1069,7 @@ def gibbs_over_pressures(
     strain_range: tuple[float, float] = (-0.04, 0.04),
     num_points: int = 7,
     fit_degree: int = 3,
-    shape_mode: phase_nodes.StrainMode | None = None,
+    shape_mode: StrainMode | None = None,
     shape_window: float = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
