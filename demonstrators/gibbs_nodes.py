@@ -27,16 +27,17 @@ import enum
 import itertools
 import math
 import os
-import typing
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import Literal, NamedTuple
+from typing import Annotated, Literal, NamedTuple, TypeIs
 
 import ase
 import flowrep as fr
 import numpy as np
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
+
+from . import uris
 
 ###
 # Generalise pyiron_workflow.physics.bulk.generate_structures
@@ -53,7 +54,14 @@ class StrainMode(enum.StrEnum):
 
     VOLUME_CONSERVING_MODES = enum.nonmember(frozenset({C_OVER_A, B_OVER_A}))
 
-    def scales(self, eps: float) -> tuple[float, float, float]:
+    def scales(
+        self,
+        eps: Annotated[float, {"uri": uris.URI.strain}],
+    ) -> tuple[
+        Annotated[float, {"uri": uris.URI.strain}],
+        Annotated[float, {"uri": uris.URI.strain}],
+        Annotated[float, {"uri": uris.URI.strain}],
+    ]:
         f = 1.0 + eps
         match self:
             case StrainMode.ISO:
@@ -93,8 +101,8 @@ StrainSpec = tuple[float, float] | Mapping[StrainMode, Sequence[float]]
 
 
 class StrainRange(NamedTuple):
-    lo: float
-    hi: float
+    lo: Annotated[float, {"uri": uris.URI.strain}]
+    hi: Annotated[float, {"uri": uris.URI.strain}]
     n: int
 
 
@@ -103,7 +111,7 @@ StrainMap = dict[StrainMode, StrainRange]
 
 def _is_plain_range(
     strain_range: Sequence[float] | StrainSpec,
-) -> typing.TypeIs[tuple[float, float]]:
+) -> TypeIs[tuple[float, float]]:
     # a mild lie, it could be some other two-entry sequence
     return (
         isinstance(strain_range, Sequence)
@@ -129,7 +137,10 @@ def _normalise_spec(strain_range, num_points) -> StrainMap:
     return spec
 
 
-def apply_strains(base: ase.Atoms, strains: Mapping[StrainMode, float]) -> ase.Atoms:
+def apply_strains(
+    base: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
+    strains: Mapping[StrainMode, float],
+) -> Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}]:
     """Apply a composition of named strain modes to ``base``'s cell."""
     scales = np.ones(3, dtype=float)
     for mode, eps in strains.items():
@@ -143,7 +154,7 @@ def apply_strains(base: ase.Atoms, strains: Mapping[StrainMode, float]) -> ase.A
 
 @fr.atomic("structure_list")
 def generate_structures(
-    base_structure: ase.Atoms,
+    base_structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     strain_range: StrainSpec = (-0.03, 0.03),
     num_points: int = 7,
 ) -> list[ase.Atoms]:
@@ -236,10 +247,10 @@ class BracketError(RuntimeError):
     """The volume grid did not bracket an interior minimum of G(V)."""
 
 
-MAX_BRACKET_STRAIN = 0.10
+MAX_BRACKET_STRAIN: Annotated[float, {"uri": uris.URI.strain}] = 0.10
 """Cap, in strain units, on how far `gibbs_at_pressure` and `recentre` will widen a window."""
 
-MIN_STRAIN_HALFWIDTH = 0.008
+MIN_STRAIN_HALFWIDTH: Annotated[float, {"uri": uris.URI.strain}] = 0.008
 """Floor, in strain units, on how far `recentre` will narrow a window.
 
 Narrowing cuts the fit residual, but a window that keeps shrinking eventually
@@ -262,7 +273,7 @@ class ShapeScan:
     static_energies: np.ndarray  # (n_shape,) eV/atom
     vib_free_energies: np.ndarray  # (n_shape, n_temperature) eV/atom
     structures: list[ase.Atoms]
-    volume_per_atom: float
+    volume_per_atom: Annotated[float, {"uri": uris.URI.volume}]
     objective: ShapeObjective
 
 
@@ -272,7 +283,7 @@ class ShapeOptimum:
 
     optimal_strains: np.ndarray  # (n_temperature,)
     free_energies: np.ndarray  # (n_temperature,) eV/atom, this is F*(V, T)
-    volume_per_atom: float
+    volume_per_atom: Annotated[float, {"uri": uris.URI.volume}]
     fell_back: np.ndarray  # (n_temperature,) bool
 
 
@@ -314,14 +325,14 @@ class GibbsResult:
     """
 
     temperatures: Sequence[float]  # (n_temperature,)
-    pressure: float  # GPa
+    pressure: Annotated[float, {"uri": uris.URI.pressure}]  # GPa
     gibbs: np.ndarray  # (n_temperature,) eV/atom
     optimal_volumes: np.ndarray  # (n_temperature,) Å³/atom
     optimal_shape_strains: np.ndarray  # (n_temperature,)
     iterations: list[GibbsIteration]
     converged: bool
-    gibbs_drift: float  # eV/atom
-    fit_residual: float  # eV/atom
+    gibbs_drift: Annotated[float, {"uri": uris.URI.gibbs_energy}]  # eV/atom
+    fit_residual: Annotated[float, {"uri": uris.URI.gibbs_energy}]  # eV/atom
     shape_fell_back_count: int
     fc2_supercell_matrix: np.ndarray  # (3, 3)
     displacement_distance: float  # Å
@@ -339,7 +350,8 @@ class GibbsSweep:
 
 
 def supercell_repetitions(
-    structure: ase.Atoms, target_length: float = 14.0
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
+    target_length: Annotated[float, {"uri": uris.URI.length}] = 14.0,
 ) -> tuple[int, int, int]:
     """Force-constant supercell repetitions giving a box of at least ``target_length``.
 
@@ -376,7 +388,7 @@ def supercell_repetitions(
 
 
 def _static_energy_per_atom(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     working_directory: str,
     tag: str,
@@ -393,12 +405,12 @@ def _static_energy_per_atom(
 
 
 def _vibrational_free_energy(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
     temperatures: Sequence[float],
     fc2_supercell_matrix,
-    displacement_distance: float,
+    displacement_distance: Annotated[float, {"uri": uris.URI.length}],
     is_plusminus,
     working_directory: str,
     tag: str,
@@ -455,16 +467,16 @@ def _parabola_vertex(
 
 
 def shape_scan_at_volume(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
     temperatures: Sequence[float],
     fc2_supercell_matrix,
     shape_mode: StrainMode | None = None,
-    shape_window: float = 0.06,
+    shape_window: Annotated[float, {"uri": uris.URI.strain}] = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
-    displacement_distance: float = 0.01,
+    displacement_distance: Annotated[float, {"uri": uris.URI.length}] = 0.01,
     is_plusminus="auto",
     working_directory: str = ".",
     tag: str = "shape_scan",
@@ -617,20 +629,20 @@ def minimise_shape(scan: ShapeScan) -> ShapeOptimum:
 
 
 def gibbs_iteration(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
-    pressure: float,
+    pressure: Annotated[float, {"uri": uris.URI.pressure}],
     temperatures: Sequence[float],
     fc2_supercell_matrix,
     strain_range: tuple[float, float] = (-0.04, 0.04),
     num_points: int = 7,
     fit_degree: int = 3,
     shape_mode: StrainMode | None = None,
-    shape_window: float = 0.06,
+    shape_window: Annotated[float, {"uri": uris.URI.strain}] = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
-    displacement_distance: float = 0.01,
+    displacement_distance: Annotated[float, {"uri": uris.URI.length}] = 0.01,
     is_plusminus="auto",
     working_directory: str = ".",
     tag: str = "iteration",
@@ -745,12 +757,14 @@ def _narrowed_bound(bound: float) -> float:
 
 
 def recentre(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     iteration: GibbsIteration,
     *,
     shape_mode: StrainMode | None = None,
-    max_strain: float = MAX_BRACKET_STRAIN,
-) -> tuple[ase.Atoms, tuple[float, float]]:
+    max_strain: Annotated[float, {"uri": uris.URI.strain}] = MAX_BRACKET_STRAIN,
+) -> tuple[
+    Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}], tuple[float, float]
+]:
     """Next seed structure and strain range, centred on the volumes just found.
 
     The grid's point count is held fixed; its centre and its width both move.
@@ -831,7 +845,9 @@ def recentre(
 
 
 def gibbs_converged(
-    previous: GibbsIteration, current: GibbsIteration, tolerance: float
+    previous: GibbsIteration,
+    current: GibbsIteration,
+    tolerance: Annotated[float, {"uri": uris.URI.gibbs_energy}],
 ) -> tuple[bool, float]:
     """``(converged, drift)`` where drift is ``max over T of |G_new - G_old|``."""
     drift = float(np.max(np.abs(current.gibbs - previous.gibbs)))
@@ -839,23 +855,23 @@ def gibbs_converged(
 
 
 def gibbs_at_pressure(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
-    pressure: float,
+    pressure: Annotated[float, {"uri": uris.URI.pressure}],
     temperatures: Sequence[float],
     supercell_target_length: float = 14.0,
     strain_range: tuple[float, float] = (-0.04, 0.04),
     num_points: int = 7,
     fit_degree: int = 3,
     shape_mode: StrainMode | None = None,
-    shape_window: float = 0.06,
+    shape_window: Annotated[float, {"uri": uris.URI.strain}] = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
-    displacement_distance: float = 0.01,
+    displacement_distance: Annotated[float, {"uri": uris.URI.length}] = 0.01,
     is_plusminus="auto",
     max_iterations: int = 8,
-    gibbs_tolerance: float = 1e-4,
+    gibbs_tolerance: Annotated[float, {"uri": uris.URI.gibbs_energy}] = 1e-4,
     working_directory: str = ".",
     tag: str = "gibbs",
 ) -> GibbsResult:
@@ -1022,7 +1038,11 @@ def gibbs_at_pressure(
     )
 
 
-def _format_pressure(pressure: float, decimals: int, int_width: int) -> str:
+def _format_pressure(
+    pressure: Annotated[float, {"uri": uris.URI.pressure}],
+    decimals: int,
+    int_width: int,
+) -> str:
     sign = "n" if pressure < 0 else ""
     width = int_width + 1 + decimals
     body = f"{abs(pressure):0{width}.{decimals}f}".replace(".", "_")
@@ -1060,7 +1080,7 @@ def _pressure_tags(tag: str, pressures: Sequence[float]) -> list[str]:
 
 @fr.workflow
 def gibbs_over_pressures(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     pressures: Sequence[float],
     *,
@@ -1070,13 +1090,13 @@ def gibbs_over_pressures(
     num_points: int = 7,
     fit_degree: int = 3,
     shape_mode: StrainMode | None = None,
-    shape_window: float = 0.06,
+    shape_window: Annotated[float, {"uri": uris.URI.strain}] = 0.06,
     num_shape_points: int = 5,
     shape_objective: ShapeObjective = "free_energy",
-    displacement_distance: float = 0.01,
+    displacement_distance: Annotated[float, {"uri": uris.URI.length}] = 0.01,
     is_plusminus="auto",
     max_iterations: int = 8,
-    gibbs_tolerance: float = 1e-4,
+    gibbs_tolerance: Annotated[float, {"uri": uris.URI.gibbs_energy}] = 1e-4,
     working_directory: str = ".",
     tag: str = "sweep",
 ) -> GibbsSweep:

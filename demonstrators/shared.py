@@ -1,9 +1,11 @@
 import dataclasses
-from typing import TypeAlias
+from typing import Annotated, TypeAlias
 
 import ase
 import flowrep as fr
 from pyiron_workflow_atomistics import engine as engine_mod
+
+from . import uris
 
 InputType: TypeAlias = (
     engine_mod.CalcInputStatic | engine_mod.CalcInputMinimize | engine_mod.CalcInputMD
@@ -35,7 +37,7 @@ def with_calc_input(
 
 @fr.workflow
 def calculate_with_input(
-    structure: ase.Atoms,
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     calc_input: InputType,
     label: str,

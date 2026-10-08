@@ -1,25 +1,25 @@
+from typing import Annotated
+
 import ase
 import flowrep as fr
-import semantikon
 from ase import build
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import bulk, elastic
 
 from . import shared, uris
 
-### Restructured
-
 
 @fr.workflow
 def elastic_constants(
     engine: engine_mod.ASEEngine,
-    structure: semantikon.u(ase.Atoms, uris=uris.PMDco.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     # Physically, we're looking for a 3d structure, beyond that it's up to the user
     # if what they give in will give back physically meaningful numbers, IMO
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
     norm_strains: tuple[float, ...] = (-0.01, -0.005, 0.005, 0.01),
     shear_strains: tuple[float, ...] = (-0.06, -0.03, 0.03, 0.06),
-    # Neither PMDco nor TTO have "strain" entries...
+    # Semantikon has no concept for a collection of URIs
+    # So while ASMO has a "strain" entry, it is not usable here
 ):
     relax_engine = elastic.with_calc_input(engine=engine, calc_input=relaxation_config)
     relaxed_output = engine_mod.calculate(structure=structure, engine=relax_engine)
@@ -47,11 +47,10 @@ def elastic_constants(
     return ref_structure, fit, summary
 
 
-### New
-
-
 @fr.atomic("unit_cell")
-def bulk_unit(symbol: str) -> semantikon.u(ase.Atoms, uris=uris.PMDco.atomic_structure):
+def bulk_unit(
+    symbol: Annotated[str, {"uri": uris.URI.chemical_symbol}],
+) -> Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}]:
     # also "bulk"... and "3D (data)"
     return build.bulk(symbol)
 
@@ -59,18 +58,18 @@ def bulk_unit(symbol: str) -> semantikon.u(ase.Atoms, uris=uris.PMDco.atomic_str
 @fr.atomic("bulk_modulus")
 def get_bulk_modulus(
     elastic_summary: dict,
-) -> semantikon.u(float, uri=uris.PMDco.bulk_modulus):
+) -> Annotated[float, {"uri": uris.URI.bulk_modulus}]:
     return elastic_summary["K_VRH"]
 
 
 @fr.workflow
 def unary_elastic_tensor(
     engine: engine_mod.ASEEngine,
-    symbol: semantikon.u(str, uri=uris.PMDco.chemical_composition),
+    symbol: Annotated[str, {"uri": uris.URI.chemical_symbol}],
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
     norm_strains: tuple[float, ...] = (-0.01, -0.005, 0.005, 0.01),
     shear_strains: tuple[float, ...] = (-0.06, -0.03, 0.03, 0.06),
-) -> tuple[list[list[float]], semantikon.u(float, uri=uris.PMDco.bulk_modulus)]:
+) -> tuple[list[list[float]], Annotated[float, {"uri": uris.URI.bulk_modulus}]]:
     structure = bulk_unit(symbol)
     _ref_structure, _fit, summary = elastic_constants(
         engine=engine,
