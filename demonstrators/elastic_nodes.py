@@ -7,8 +7,6 @@ from pyiron_workflow_atomistics.physics import bulk, elastic
 
 from . import shared, uris
 
-### Restructured
-
 
 @fr.workflow
 def elastic_constants(
@@ -46,9 +44,6 @@ def elastic_constants(
     summary = elastic.elastic_constants_summary(fit, ref_structure)
 
     return ref_structure, fit, summary
-
-
-### New
 
 
 @fr.atomic("unit_cell")
