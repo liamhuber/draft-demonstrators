@@ -26,3 +26,9 @@ class AMSO:
 
     bulk_modulus = ns["BulkModulus"]
     energy = ns["Energy"]
+
+
+class URI:
+    atomic_structure = PMDco.atomic_structure
+    bulk_modulus = PMDco.bulk_modulus
+    chemical_symbol = PMDco.chemical_composition
