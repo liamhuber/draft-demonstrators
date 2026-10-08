@@ -57,11 +57,11 @@ class StrainMode(enum.StrEnum):
     def scales(
         self,
         eps: Annotated[float, {"uri": uris.URI.strain}],
-) -> tuple[
-    Annotated[float, {"uri": uris.URI.strain}],
-    Annotated[float, {"uri": uris.URI.strain}],
-    Annotated[float, {"uri": uris.URI.strain}],
-]:
+    ) -> tuple[
+        Annotated[float, {"uri": uris.URI.strain}],
+        Annotated[float, {"uri": uris.URI.strain}],
+        Annotated[float, {"uri": uris.URI.strain}],
+    ]:
         f = 1.0 + eps
         match self:
             case StrainMode.ISO:
@@ -139,7 +139,7 @@ def _normalise_spec(strain_range, num_points) -> StrainMap:
 
 def apply_strains(
     base: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
-    strains: Mapping[StrainMode, float]
+    strains: Mapping[StrainMode, float],
 ) -> Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}]:
     """Apply a composition of named strain modes to ``base``'s cell."""
     scales = np.ones(3, dtype=float)
@@ -762,7 +762,9 @@ def recentre(
     *,
     shape_mode: StrainMode | None = None,
     max_strain: Annotated[float, {"uri": uris.URI.strain}] = MAX_BRACKET_STRAIN,
-) -> tuple[Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}], tuple[float, float]]:
+) -> tuple[
+    Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}], tuple[float, float]
+]:
     """Next seed structure and strain range, centred on the volumes just found.
 
     The grid's point count is held fixed; its centre and its width both move.

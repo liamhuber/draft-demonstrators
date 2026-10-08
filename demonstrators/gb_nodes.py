@@ -98,7 +98,7 @@ def get_relaxed_gb(
 ) -> tuple[
     Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     Annotated[float, {"uri": uris.URI.energy}],
-    list[int]
+    list[int],
 ]:
     cubic_unit = build.bulk(species, cubic=True)
     raw_structure = stk.grainboundary(
