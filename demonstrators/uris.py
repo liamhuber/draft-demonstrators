@@ -18,3 +18,11 @@ class CMSO:
     ns = rdflib.Namespace("https://purls.helmholtz-metadaten.de/cmso/")
 
     atom = ns["Atom"]
+    chemical_element = ns["ChemicalElement"]
+
+
+class AMSO:
+    ns = rdflib.Namespace("https://purls.helmholtz-metadaten.de/asmo/")
+
+    bulk_modulus = ns["BulkModulus"]
+    energy = ns["Energy"]

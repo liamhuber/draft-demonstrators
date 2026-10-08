@@ -13,13 +13,14 @@ from . import shared, uris
 @fr.workflow
 def elastic_constants(
     engine: engine_mod.ASEEngine,
-    structure: semantikon.u(ase.Atoms, uris=uris.PMDco.atomic_structure),
+    structure: semantikon.u(ase.Atoms, uri=uris.PMDco.atomic_structure),
     # Physically, we're looking for a 3d structure, beyond that it's up to the user
     # if what they give in will give back physically meaningful numbers, IMO
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
     norm_strains: tuple[float, ...] = (-0.01, -0.005, 0.005, 0.01),
     shear_strains: tuple[float, ...] = (-0.06, -0.03, 0.03, 0.06),
-    # Neither PMDco nor TTO have "strain" entries...
+    # Semantikon has no concept for a collection of URIs
+    # So while ASMO has a "strain" entry, it is not usable here
 ):
     relax_engine = elastic.with_calc_input(engine=engine, calc_input=relaxation_config)
     relaxed_output = engine_mod.calculate(structure=structure, engine=relax_engine)
@@ -51,7 +52,9 @@ def elastic_constants(
 
 
 @fr.atomic("unit_cell")
-def bulk_unit(symbol: str) -> semantikon.u(ase.Atoms, uris=uris.PMDco.atomic_structure):
+def bulk_unit(
+    symbol: semantikon.u(str, uri=uris.CMSO.chemical_element),
+) -> semantikon.u(ase.Atoms, uri=uris.PMDco.atomic_structure):
     # also "bulk"... and "3D (data)"
     return build.bulk(symbol)
 
