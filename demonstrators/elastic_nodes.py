@@ -53,7 +53,7 @@ def elastic_constants(
 
 @fr.atomic("unit_cell")
 def bulk_unit(
-    symbol: semantikon.u(str, uri=uris.CMSO.chemical_element),
+    symbol: semantikon.u(str, uri=uris.PMDco.chemical_composition),
 ) -> semantikon.u(ase.Atoms, uri=uris.PMDco.atomic_structure):
     # also "bulk"... and "3D (data)"
     return build.bulk(symbol)
