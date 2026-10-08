@@ -34,7 +34,6 @@ from typing import Annotated, Literal, NamedTuple, TypeIs
 import ase
 import flowrep as fr
 import numpy as np
-import semantikon
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import free_energy as free_energy_mod
 
@@ -57,11 +56,11 @@ class StrainMode(enum.StrEnum):
 
     def scales(
         self,
-        eps: semantikon.u(float, uri=uris.URI.strain),
+        eps: Annotated[float, {"uri": uris.URI.strain}],
 ) -> tuple[
-    semantikon.u(float, uri=uris.URI.strain),
-    semantikon.u(float, uri=uris.URI.strain),
-    semantikon.u(float, uri=uris.URI.strain),
+    Annotated[float, {"uri": uris.URI.strain}],
+    Annotated[float, {"uri": uris.URI.strain}],
+    Annotated[float, {"uri": uris.URI.strain}],
 ]:
         f = 1.0 + eps
         match self:
@@ -139,9 +138,9 @@ def _normalise_spec(strain_range, num_points) -> StrainMap:
 
 
 def apply_strains(
-    base: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    base: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     strains: Mapping[StrainMode, float]
-) -> semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure):
+) -> Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}]:
     """Apply a composition of named strain modes to ``base``'s cell."""
     scales = np.ones(3, dtype=float)
     for mode, eps in strains.items():
@@ -155,7 +154,7 @@ def apply_strains(
 
 @fr.atomic("structure_list")
 def generate_structures(
-    base_structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    base_structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     strain_range: StrainSpec = (-0.03, 0.03),
     num_points: int = 7,
 ) -> list[ase.Atoms]:
@@ -351,7 +350,7 @@ class GibbsSweep:
 
 
 def supercell_repetitions(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     target_length: Annotated[float, {"uri": uris.URI.length}] = 14.0,
 ) -> tuple[int, int, int]:
     """Force-constant supercell repetitions giving a box of at least ``target_length``.
@@ -389,7 +388,7 @@ def supercell_repetitions(
 
 
 def _static_energy_per_atom(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     working_directory: str,
     tag: str,
@@ -406,7 +405,7 @@ def _static_energy_per_atom(
 
 
 def _vibrational_free_energy(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
     temperatures: Sequence[float],
@@ -468,7 +467,7 @@ def _parabola_vertex(
 
 
 def shape_scan_at_volume(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
     temperatures: Sequence[float],
@@ -630,7 +629,7 @@ def minimise_shape(scan: ShapeScan) -> ShapeOptimum:
 
 
 def gibbs_iteration(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
     pressure: Annotated[float, {"uri": uris.URI.pressure}],
@@ -758,12 +757,12 @@ def _narrowed_bound(bound: float) -> float:
 
 
 def recentre(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     iteration: GibbsIteration,
     *,
     shape_mode: StrainMode | None = None,
     max_strain: Annotated[float, {"uri": uris.URI.strain}] = MAX_BRACKET_STRAIN,
-) -> tuple[semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure), tuple[float, float]]:
+) -> tuple[Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}], tuple[float, float]]:
     """Next seed structure and strain range, centred on the volumes just found.
 
     The grid's point count is held fixed; its centre and its width both move.
@@ -854,7 +853,7 @@ def gibbs_converged(
 
 
 def gibbs_at_pressure(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     *,
     pressure: Annotated[float, {"uri": uris.URI.pressure}],
@@ -1079,7 +1078,7 @@ def _pressure_tags(tag: str, pressures: Sequence[float]) -> list[str]:
 
 @fr.workflow
 def gibbs_over_pressures(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     pressures: Sequence[float],
     *,

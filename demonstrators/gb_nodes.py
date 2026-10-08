@@ -1,10 +1,10 @@
 from collections.abc import Iterable, Sequence
+from typing import Annotated
 
 import ase
 import flowrep as fr
 import freud
 import numpy as np
-import semantikon
 import structuretoolkit as stk
 from ase import build
 from ase.geometry import cell as ase_cell
@@ -16,7 +16,7 @@ from . import shared, uris
 
 @fr.atomic
 def find_unique_sites(
-    structure: semantikon.u(ase.Atoms, uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
 ) -> list[int]:
     """by Steinhardt parameters"""
     raw_metrics = stk.get_steinhardt_parameter_structure(
@@ -45,7 +45,7 @@ def find_unique_sites(
 
 @fr.workflow
 def get_relaxed_bulk(
-    species: semantikon.u(str, uri=uris.URI.chemical_symbol),
+    species: Annotated[str, {"uri": uris.URI.chemical_symbol}],
     repetitions: int,
     engine: engine_mod.Engine,
     minimize_input: engine_mod.CalcInputMinimize,
@@ -78,7 +78,7 @@ class GBParameters:
 
 @fr.atomic
 def clean_cell(
-    structure: semantikon.u(ase.Atoms, uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     rtol: float = 1e-6,
 ) -> None:
     """Zero out near-zero cell entries that can be artefacts of GB creation."""
@@ -91,13 +91,13 @@ def clean_cell(
 
 @fr.workflow
 def get_relaxed_gb(
-    species: semantikon.u(str, uri=uris.URI.chemical_symbol),
+    species: Annotated[str, {"uri": uris.URI.chemical_symbol}],
     gb_parameters: GBParameters,
     engine: engine_mod.Engine,
     minimize_input: engine_mod.CalcInputMinimize,
 ) -> tuple[
-    semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
-    semantikon.u(float, uri=uris.URI.energy),
+    Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
+    Annotated[float, {"uri": uris.URI.energy}],
     list[int]
 ]:
     cubic_unit = build.bulk(species, cubic=True)
@@ -126,7 +126,7 @@ def get_relaxed_gb(
 
 @fr.atomic
 def analyze_voronoi(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     sites: list[int],
 ) -> list[float]:
     """Per-atom Voronoi volumes for a fully periodic cell."""
@@ -152,8 +152,8 @@ def relaxation_substitution_label(context: str, solute: str, site_index: int):
 
 @fr.workflow
 def relax_substitution(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
-    substitute: semantikon.u(str, uri=uris.URI.chemical_symbol),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
+    substitute: Annotated[str, {"uri": uris.URI.chemical_symbol}],
     site_index: int,
     engine: engine_mod.Engine,
     minimize_input: engine_mod.CalcInputMinimize,
@@ -187,11 +187,11 @@ def data_at_energy_minima(
 
 @fr.atomic
 def calculate_segregation_energy(
-    bulk_energy: semantikon.u(float, uri=uris.URI.bulk_energy),
-    gb_energy: semantikon.u(float, uri=uris.URI.bulk_energy),
-    solvated_energy: semantikon.u(float, uri=uris.URI.bulk_energy),
-    segregated_energy: semantikon.u(float, uri=uris.URI.bulk_energy),
-) -> semantikon.u(float, uri=uris.URI.bulk_energy):
+    bulk_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
+    gb_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
+    solvated_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
+    segregated_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
+) -> Annotated[float, {"uri": uris.URI.bulk_energy}]:
     """Negative = favourable convention"""
     return (segregated_energy + bulk_energy) - (gb_energy + solvated_energy)
 
@@ -199,7 +199,7 @@ def calculate_segregation_energy(
 @fr.workflow
 def volumetric_segregation(
     # Chemistry
-    host: semantikon.u(str, uri=uris.URI.chemical_symbol),
+    host: Annotated[str, {"uri": uris.URI.chemical_symbol}],
     solutes: Iterable[str],
     # Geometry
     bulk_reps: int,
@@ -209,7 +209,7 @@ def volumetric_segregation(
     clean_minimize_input: engine_mod.CalcInputMinimize,
     solute_minimize_input: engine_mod.CalcInputMinimize,
 ) -> tuple[
-    semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     list[int],
     list[list[float]],
     list[list[float]],

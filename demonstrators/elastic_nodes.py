@@ -1,6 +1,7 @@
+from typing import Annotated
+
 import ase
 import flowrep as fr
-import semantikon
 from ase import build
 from pyiron_workflow_atomistics import engine as engine_mod
 from pyiron_workflow_atomistics.physics import bulk, elastic
@@ -11,7 +12,7 @@ from . import shared, uris
 @fr.workflow
 def elastic_constants(
     engine: engine_mod.ASEEngine,
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     # Physically, we're looking for a 3d structure, beyond that it's up to the user
     # if what they give in will give back physically meaningful numbers, IMO
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
@@ -48,8 +49,8 @@ def elastic_constants(
 
 @fr.atomic("unit_cell")
 def bulk_unit(
-    symbol: semantikon.u(str, uri=uris.URI.chemical_symbol),
-) -> semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure):
+    symbol: Annotated[str, {"uri": uris.URI.chemical_symbol}],
+) -> Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}]:
     # also "bulk"... and "3D (data)"
     return build.bulk(symbol)
 
@@ -57,18 +58,18 @@ def bulk_unit(
 @fr.atomic("bulk_modulus")
 def get_bulk_modulus(
     elastic_summary: dict,
-) -> semantikon.u(float, uri=uris.URI.bulk_modulus):
+) -> Annotated[float, {"uri": uris.URI.bulk_modulus}]:
     return elastic_summary["K_VRH"]
 
 
 @fr.workflow
 def unary_elastic_tensor(
     engine: engine_mod.ASEEngine,
-    symbol: semantikon.u(str, uri=uris.URI.chemical_symbol),
+    symbol: Annotated[str, {"uri": uris.URI.chemical_symbol}],
     relaxation_config: engine_mod.CalcInputMinimize | engine_mod.CalcInputStatic,
     norm_strains: tuple[float, ...] = (-0.01, -0.005, 0.005, 0.01),
     shear_strains: tuple[float, ...] = (-0.06, -0.03, 0.03, 0.06),
-) -> tuple[list[list[float]], semantikon.u(float, uri=uris.URI.bulk_modulus)]:
+) -> tuple[list[list[float]], Annotated[float, {"uri": uris.URI.bulk_modulus}]]:
     structure = bulk_unit(symbol)
     _ref_structure, _fit, summary = elastic_constants(
         engine=engine,

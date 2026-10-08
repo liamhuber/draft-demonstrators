@@ -1,9 +1,8 @@
 import dataclasses
-from typing import TypeAlias
+from typing import Annotated, TypeAlias
 
 import ase
 import flowrep as fr
-import semantikon
 from pyiron_workflow_atomistics import engine as engine_mod
 
 from . import uris
@@ -38,7 +37,7 @@ def with_calc_input(
 
 @fr.workflow
 def calculate_with_input(
-    structure: semantikon.u(ase.Atoms, uri=uris.URI.atomic_structure),
+    structure: Annotated[ase.Atoms, {"uri": uris.URI.atomic_structure}],
     engine: engine_mod.Engine,
     calc_input: InputType,
     label: str,
