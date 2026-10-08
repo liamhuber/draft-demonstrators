@@ -187,11 +187,11 @@ def data_at_energy_minima(
 
 @fr.atomic
 def calculate_segregation_energy(
-    bulk_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
-    gb_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
-    solvated_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
-    segregated_energy: Annotated[float, {"uri": uris.URI.bulk_energy}],
-) -> Annotated[float, {"uri": uris.URI.bulk_energy}]:
+    bulk_energy: Annotated[float, {"uri": uris.URI.energy}],
+    gb_energy: Annotated[float, {"uri": uris.URI.energy}],
+    solvated_energy: Annotated[float, {"uri": uris.URI.energy}],
+    segregated_energy: Annotated[float, {"uri": uris.URI.energy}],
+) -> Annotated[float, {"uri": uris.URI.energy}]:
     """Negative = favourable convention"""
     return (segregated_energy + bulk_energy) - (gb_energy + solvated_energy)
 
