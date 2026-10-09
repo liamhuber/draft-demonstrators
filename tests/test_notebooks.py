@@ -53,7 +53,10 @@ class TestNotebooks(unittest.TestCase):
         self.run_notebook("grain_boundary")
 
     def test_phase_stability(self):
-        self.run_notebook("phase_stability", parameters={"cheap": True})
+        self.run_notebook(
+            "phase_stability",
+            parameters={"cheap": True, "use_result": False, "write_result": False}
+        )
 
 
 if __name__ == "__main__":
