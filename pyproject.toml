@@ -26,8 +26,15 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "ipykernel==7.4.0",
+    "coverage==7.16.2",
     "papermill==2.7.0",
 ]
 
 [tool.setuptools]
 packages = ["demonstrators"]
+
+[tool.coverage.run]
+source = ["demonstrators"]
+# The notebooks run in Jupyter kernel subprocesses
+patch = ["subprocess"]
+parallel = true

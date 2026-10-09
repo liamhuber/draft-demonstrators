@@ -2,6 +2,7 @@
 .DS_Store
 .claude/
 .coverage
+.coverage.*
 pyiron.log
 .idea/
 .ipynb_checkpoints/
