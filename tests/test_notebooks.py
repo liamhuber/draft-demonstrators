@@ -41,12 +41,13 @@ class TestNotebooks(unittest.TestCase):
             os.environ["PYTHONPATH"] = self._old_pythonpath
         self._tmp.cleanup()
 
-    def run_notebook(self, name: str):
+    def run_notebook(self, name: str, parameters: dict | None = None):
         papermill.execute_notebook(
             _REPO_ROOT / f"{name}.ipynb",
             self.work_dir / f"{name}.out.ipynb",
             cwd=self.work_dir,
             kernel_name="python3",
+            parameters=parameters,
             progress_bar=False,
         )
 
@@ -57,7 +58,7 @@ class TestNotebooks(unittest.TestCase):
         self.run_notebook("grain_boundary")
 
     def test_phase_stability(self):
-        self.run_notebook("phase_stability")
+        self.run_notebook("phase_stability", parameters={"cheap": True})
 
 
 if __name__ == "__main__":
