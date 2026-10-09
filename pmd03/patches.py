@@ -1,3 +1,5 @@
+"""Patches making ASE calculators and classes serializable as workflow input."""
+
 import importlib
 
 from ase.calculators import eam, emt
@@ -24,6 +26,7 @@ class _SerializableCalculator:
 
     def __init__(self, _items=None, **kwargs):
         # dataclasses.asdict rebuilds dict subclasses as `type(obj)(items)`
+        """Build from calculator keyword arguments, or rebuild from serialized items."""
         if _items is not None:
             items = dict(_items)
             init_args = {arg: items[arg] for arg in self._init_args}
@@ -32,11 +35,13 @@ class _SerializableCalculator:
         self._calculator_class.__init__(self, **kwargs)
 
     def set(self, **kwargs):
+        """Set calculator parameters as usual, then refresh the serialized items."""
         changed_parameters = self._calculator_class.set(self, **kwargs)
         self._sync_items()
         return changed_parameters
 
     def _sync_items(self):
+        """Rewrite the `dict` items from the calculator's class, parameters and extra `__init__` arguments."""
         cls = self._calculator_class
         dict.clear(self)
         dict.update(
@@ -49,6 +54,7 @@ class _SerializableCalculator:
         )
 
     def __reduce__(self):
+        """Rebuild from the serialized items, dropping cached calculator state."""
         return type(self), (dict(self),)
 
     __eq__ = object.__eq__
@@ -57,6 +63,7 @@ class _SerializableCalculator:
     __repr__ = object.__repr__
 
     def __bool__(self):
+        """Always truthy, like a plain object, even when the `dict` items are empty."""
         return True
 
 
@@ -88,6 +95,7 @@ class JSONableClass(dict):
 
     def __init__(self, cls_or_items):
         # dataclasses.asdict rebuilds dict subclasses as `type(obj)(items)`
+        """Wrap a class, or rebuild a wrapper from its serialized items."""
         if isinstance(cls_or_items, type):
             path = f"{cls_or_items.__module__}.{cls_or_items.__qualname__}"
         else:
@@ -96,9 +104,11 @@ class JSONableClass(dict):
         self.cls = _import_from_path(path)
 
     def __call__(self, *args, **kwargs):
+        """Instantiate the wrapped class."""
         return self.cls(*args, **kwargs)
 
     def __hash__(self):
+        """Hash by import path."""
         return hash(self["class"])
 
     def __repr__(self):
@@ -106,6 +116,12 @@ class JSONableClass(dict):
 
 
 def _import_from_path(path):
+    """
+    Import an object from its dotted path.
+
+    The split between module and qualified name is not known in advance, so
+    successively shorter prefixes are tried as the module.
+    """
     module_name, _, qualname = path.rpartition(".")
     while module_name:
         try:

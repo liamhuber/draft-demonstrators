@@ -1,7 +1,11 @@
+"""Ontology URIs for annotating workflow inputs and outputs."""
+
 import rdflib
 
 
 class PMDco:
+    """Terms from the Platform MaterialDigital core ontology (PMDco)."""
+
     ns = rdflib.Namespace("https://w3id.org/pmd/co/PMD_")
 
     atomic_structure = ns["0000526"]
@@ -14,13 +18,17 @@ class PMDco:
     volume = ns["0020150"]
 
 
-class AMSO:
+class ASMO:
+    """Terms from the Atomistic Simulation Methods Ontology (ASMO)."""
+
     ns = rdflib.Namespace("https://purls.helmholtz-metadaten.de/asmo/")
 
     strain = ns["Strain"]
 
 
 class URI:
+    """The URIs used in this package, keyed by concept rather than by source ontology."""
+
     atomic_structure = PMDco.atomic_structure
     bulk_modulus = PMDco.bulk_modulus
     chemical_symbol = PMDco.chemical_composition
@@ -28,5 +36,5 @@ class URI:
     gibbs_energy = PMDco.gibbs_energy
     length = PMDco.length
     pressure = PMDco.pressure
-    strain = AMSO.strain
+    strain = ASMO.strain
     volume = PMDco.volume

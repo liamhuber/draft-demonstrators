@@ -1,3 +1,5 @@
+"""Workflows for solute segregation to grain boundaries, analysed against site excess volume."""
+
 from collections.abc import Iterable, Sequence
 from typing import Annotated
 
@@ -54,6 +56,12 @@ def get_relaxed_bulk(
     float,
     list[int],
 ]:
+    """Relax (positions and cell) a cubic bulk supercell of ``species``.
+
+    Returns the relaxed supercell, its energy, and the indices of the distinct sites.
+    Sites are found on the cubic unit cell, which the supercell repeats from its first
+    atoms onward, so the indices are also valid in the supercell.
+    """
     cubic_unit = build.bulk(species, cubic=True)
     unique_sites = find_unique_sites(cubic_unit)
     supercell = structure_mod.create_supercell(cubic_unit, repetitions)
@@ -68,6 +76,13 @@ def get_relaxed_bulk(
 
 @fr.dataclass
 class GBParameters:
+    """Geometry of a coincident site lattice grain boundary, for ``structuretoolkit.grainboundary``.
+
+    ``axis`` is the rotation axis, ``sigma`` the coincidence index Σ, and ``plane`` the
+    boundary plane. ``grain_thickness`` sets the number of unit cells in each grain,
+    and ``supercell_repeats`` further repeats the resulting periodic cell.
+    """
+
     axis: tuple[int, int, int]
     sigma: int
     plane: tuple[int, int, int]
@@ -100,6 +115,11 @@ def get_relaxed_gb(
     Annotated[float, {"uri": uris.URI.energy}],
     list[int],
 ]:
+    """Build, clean and relax (positions and cell) a grain boundary supercell of ``species``.
+
+    Returns the relaxed structure, its energy, and the indices of its distinct sites,
+    identified by :func:`find_unique_sites` on the unrelaxed supercell.
+    """
     cubic_unit = build.bulk(species, cubic=True)
     raw_structure = stk.grainboundary(
         axis=gb_parameters.axis,
@@ -147,6 +167,7 @@ def analyze_voronoi(
 
 @fr.atomic
 def relaxation_substitution_label(context: str, solute: str, site_index: int):
+    """A unique sub-engine label for one substitution relaxation."""
     return f"relax_{context}_with_{solute}_at_{site_index}"
 
 
@@ -159,6 +180,11 @@ def relax_substitution(
     minimize_input: engine_mod.CalcInputMinimize,
     context_tag: str,
 ) -> tuple[ase.Atoms, float]:
+    """Substitute ``substitute`` at ``site_index`` of ``structure`` and relax it.
+
+    How much may relax is set by ``minimize_input``; for dilute-limit segregation
+    energies this is positions only, at the fixed cell of the clean host.
+    """
     substituted_structure = structure_mod.substitutional_swap(
         structure, site_index, substitute
     )
@@ -176,6 +202,7 @@ def relax_substitution(
 def data_at_energy_minima(
     energies: Sequence[float], volumes: Sequence[float]
 ) -> tuple[float, float]:
+    """The lowest energy, and the volume at the same index."""
     if len(energies) != len(volumes):
         raise ValueError("energies and volumes must be the same length")
 
@@ -214,6 +241,18 @@ def volumetric_segregation(
     list[list[float]],
     list[list[float]],
 ]:
+    """Segregation energy and excess volume of each solute at each distinct grain boundary site.
+
+    The clean bulk and grain boundary are relaxed with ``clean_minimize_input``. Each
+    solute is then substituted at every distinct site of both and relaxed with
+    ``solute_minimize_input``. Segregation energies are measured against the solute's
+    most favourable bulk site (negative = favourable), and excess volumes are the
+    clean-host Voronoi volume of each grain boundary site minus that of the same bulk
+    reference site.
+
+    Returns the relaxed clean grain boundary, its distinct site indices, and per-solute
+    lists of excess volumes and segregation energies, each ordered like the sites.
+    """
     bulk_structure, bulk_energy, bulk_sites = get_relaxed_bulk(
         host, bulk_reps, engine, clean_minimize_input
     )

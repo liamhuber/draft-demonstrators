@@ -1,3 +1,9 @@
+"""The public API of `pmd03`.
+
+Everything re-exported here is covered by semantic versioning; anything else in
+the package is internal and may change without notice.
+"""
+
 from .elastic_nodes import unary_elastic_tensor as unary_elastic_tensor
 from .gb_nodes import GBParameters as GBParameters
 from .gb_nodes import volumetric_segregation as volumetric_segregation
