@@ -1,3 +1,5 @@
+"""Nodes shared between the demonstration workflows."""
+
 import dataclasses
 from typing import Annotated
 
@@ -42,6 +44,11 @@ def calculate_with_input(
     calc_input: InputType,
     label: str,
 ):
+    """Calculate ``structure`` with ``engine`` switched to ``calc_input``.
+
+    The calculation runs in a sub-engine whose working directory is ``label``. Returns
+    the final structure and final energy.
+    """
     sub_engine = engine_mod.subengine(engine, label)
     used_engine = with_calc_input(sub_engine, calc_input)
     output = engine_mod.calculate(structure=structure, engine=used_engine)

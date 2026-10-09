@@ -1,3 +1,8 @@
+"""Ontologically-annotated atomistic workflow demonstrators.
+
+The public API is re-exported here from `pmd03.api`.
+"""
+
 import importlib.metadata
 
 from .api import GBParameters as GBParameters

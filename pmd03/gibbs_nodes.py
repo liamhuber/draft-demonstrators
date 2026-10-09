@@ -1,24 +1,4 @@
-"""Self-consistent quasiharmonic Gibbs free energy.
-
-Differs from ``phase_nodes.quasiharmonic_free_energy`` in three ways:
-
-1. Volume-conserving shape strains are optimised against the *free* energy
-   ``F(V', T)`` at each temperature, not against the static energy ``E(V', 0)``.
-2. The volume minimisation is done here on a per-temperature polynomial fit
-   rather than by ``phonopy.qha.QHA``. That is forced: optimising shape per
-   temperature makes the static energy ``E*(V, T)`` two-dimensional, while
-   ``QHA`` accepts only a one-dimensional ``electronic_energies``.
-3. The volume grid is re-centred *and narrowed*, and the calculation repeated,
-   until ``G(T, P)`` stops moving — so the sampling window sits on top of the
-   answer at a width it has actually been tested at, and the residual fit error
-   is the same for every phase being compared. Converging on position alone is
-   not enough: a centred window reproduces itself, so the drift goes to zero
-   with the fit bias intact. See :func:`recentre`, and read
-   ``GibbsResult.fit_residual`` for what the fit error actually is.
-
-Everything here is in eV/atom and Å³/atom. See
-``.claude/superpowers/2026-08-20-self-consistent-gibbs-design.md``.
-"""
+"""Workflows for self-consistent quasiharmonic Gibbs free energy."""
 
 from __future__ import annotations
 
@@ -45,6 +25,12 @@ from . import uris
 
 
 class StrainMode(enum.StrEnum):
+    """Named cell strains, as per-axis scale factors on the cell vectors.
+
+    ``ISO``, ``A``, ``B`` and ``C`` stretch all three or a single cell vector;
+    ``C_OVER_A`` and ``B_OVER_A`` change an axial ratio at fixed volume.
+    """
+
     ISO = "iso"
     A = "a"
     B = "b"
@@ -62,6 +48,7 @@ class StrainMode(enum.StrEnum):
         Annotated[float, {"uri": uris.URI.strain}],
         Annotated[float, {"uri": uris.URI.strain}],
     ]:
+        """Scale factors for the three cell vectors at strain ``eps``."""
         f = 1.0 + eps
         match self:
             case StrainMode.ISO:
@@ -86,14 +73,17 @@ class StrainMode(enum.StrEnum):
 
     @property
     def volume_conserving_modes(self) -> frozenset[StrainMode]:
+        """The modes that change cell shape at fixed volume."""
         return frozenset({StrainMode.C_OVER_A, StrainMode.B_OVER_A})
 
     @property
     def is_volume_conserving(self) -> bool:
+        """Whether this mode changes cell shape at fixed volume."""
         return self in self.VOLUME_CONSERVING_MODES
 
     @classmethod
     def from_sequence(cls, modes: Sequence[str]) -> list[StrainMode]:
+        """Parse a sequence of mode names."""
         return [StrainMode(m) for m in modes]
 
 
@@ -101,6 +91,8 @@ StrainSpec = tuple[float, float] | Mapping[StrainMode, Sequence[float]]
 
 
 class StrainRange(NamedTuple):
+    """``n`` evenly spaced strains from ``lo`` to ``hi``."""
+
     lo: Annotated[float, {"uri": uris.URI.strain}]
     hi: Annotated[float, {"uri": uris.URI.strain}]
     n: int
@@ -113,6 +105,7 @@ def _is_plain_range(
     strain_range: Sequence[float] | StrainSpec,
 ) -> TypeIs[tuple[float, float]]:
     # a mild lie, it could be some other two-entry sequence
+    """Whether ``strain_range`` is a bare ``(lo, hi)`` pair rather than a per-mode spec."""
     return (
         isinstance(strain_range, Sequence)
         and len(strain_range) == 2
@@ -1043,6 +1036,11 @@ def _format_pressure(
     decimals: int,
     int_width: int,
 ) -> str:
+    """A filesystem-safe tag for one pressure.
+
+    The decimal point becomes an underscore and negative pressures get an ``n``
+    prefix, e.g. ``p_012_5`` for 12.5 with one decimal and an integer width of three.
+    """
     sign = "n" if pressure < 0 else ""
     width = int_width + 1 + decimals
     body = f"{abs(pressure):0{width}.{decimals}f}".replace(".", "_")
