@@ -9,7 +9,7 @@ requires-python = "==3.13.*"
 dependencies = [
     "aimsgb==1.1.1",
     "ase==3.29.0",
-    "bagofholding==0.1.15",
+    "bagofholding==0.1.16",
     "flowrep[drawing]==0.6.7",
     "freud-analysis==3.6.1",
     "lz-GB-code==0.1.0",
