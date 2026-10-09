@@ -7,7 +7,8 @@ import unittest
 import papermill
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
-_RESOURCES = ("Pb_II_Wang_2018.eam.alloy",)
+_RESOURCES = _REPO_ROOT / "resources"
+_CACHED_RESULTS = ("phase_run.h5",)
 
 
 class TestNotebooks(unittest.TestCase):
@@ -16,14 +17,17 @@ class TestNotebooks(unittest.TestCase):
 
     Each notebook runs in a fresh temporary directory so that run artefacts
     (e.g. `demo_runs/`) stay out of the repo and cached results (e.g.
-    `phase_run.h5`) are not reused.
+    `resources/phase_run.h5`) are not reused.
     """
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.work_dir = pathlib.Path(self._tmp.name)
-        for resource in _RESOURCES:
-            shutil.copy(_REPO_ROOT / resource, self.work_dir / resource)
+        shutil.copytree(
+            _RESOURCES,
+            self.work_dir / _RESOURCES.name,
+            ignore=shutil.ignore_patterns(*_CACHED_RESULTS),
+        )
 
         self._old_pythonpath = os.environ.get("PYTHONPATH")
         os.environ["PYTHONPATH"] = os.pathsep.join(
