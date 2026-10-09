@@ -8,7 +8,7 @@ import papermill
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _RESOURCES = _REPO_ROOT / "resources"
-_CACHED_RESULTS = ("phase_run.h5",)
+_RESULTS = _REPO_ROOT / "results"
 
 
 class TestNotebooks(unittest.TestCase):
@@ -17,17 +17,14 @@ class TestNotebooks(unittest.TestCase):
 
     Each notebook runs in a fresh temporary directory so that run artefacts
     (e.g. `demo_runs/`) stay out of the repo and cached results (e.g.
-    `resources/phase_run.h5`) are not reused.
+    `results/phase_run.h5`) are not reused.
     """
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.work_dir = pathlib.Path(self._tmp.name)
-        shutil.copytree(
-            _RESOURCES,
-            self.work_dir / _RESOURCES.name,
-            ignore=shutil.ignore_patterns(*_CACHED_RESULTS),
-        )
+        shutil.copytree(_RESOURCES, self.work_dir / _RESOURCES.name)
+        shutil.copytree(_RESULTS, self.work_dir / _RESULTS.name)
 
         self._old_pythonpath = os.environ.get("PYTHONPATH")
         os.environ["PYTHONPATH"] = os.pathsep.join(
@@ -55,10 +52,28 @@ class TestNotebooks(unittest.TestCase):
         self.run_notebook("elastic")
 
     def test_grain_boundary(self):
-        self.run_notebook("grain_boundary")
+        self.run_notebook(
+            "grain_boundary",
+            parameters={"cheap": True, "use_result": False, "write_result": False}
+        )
 
     def test_phase_stability(self):
-        self.run_notebook("phase_stability", parameters={"cheap": True})
+        self.run_notebook(
+            "phase_stability",
+            parameters={"cheap": True, "use_result": False, "write_result": False}
+        )
+
+    def test_grain_boundary_loading(self):
+        self.run_notebook(
+            "grain_boundary",
+            parameters={"cheap": True, "use_result": True, "write_result": False}
+        )
+
+    def test_phase_stability_loading(self):
+        self.run_notebook(
+            "phase_stability",
+            parameters={"cheap": True, "use_result": True, "write_result": False}
+        )
 
 
 if __name__ == "__main__":
