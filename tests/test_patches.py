@@ -7,7 +7,7 @@ import unittest
 
 from ase import build, optimize
 
-from demonstrators import patches
+from pmd03 import patches
 
 _EAM_POTENTIAL = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
