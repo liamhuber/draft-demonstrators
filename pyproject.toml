@@ -23,7 +23,7 @@ dependencies = [
     "structuretoolkit==0.0.47",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
     "ipykernel==7.4.0",
     "coverage==7.16.2",
