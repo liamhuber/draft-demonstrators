@@ -18,7 +18,7 @@ class PMDco:
     volume = ns["0020150"]
 
 
-class AMSO:
+class ASMO:
     """Terms from the Atomistic Simulation Methods Ontology (ASMO)."""
 
     ns = rdflib.Namespace("https://purls.helmholtz-metadaten.de/asmo/")
@@ -36,5 +36,5 @@ class URI:
     gibbs_energy = PMDco.gibbs_energy
     length = PMDco.length
     pressure = PMDco.pressure
-    strain = AMSO.strain
+    strain = ASMO.strain
     volume = PMDco.volume
