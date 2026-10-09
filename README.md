@@ -1,5 +1,21 @@
-# Draft demonstrators
+# Three ontologically-annotated atomistic workflows
 
-A simple, visible place to facilitate collaboration in developing ontologically-annotated nodes.
+Here we present three physically-meaningful demonstration workflows. They are built on the foundation of the [`pyiron_workflow_atomistics` node library](https://github.com/pyiron/pyiron_workflow_atomistics), and use the [PMDco](https://w3id.org/pmd/co) for ontological annotation of inputs and outputs where available.
 
-Final results will be integrated into existing node packages, or in their own repo in the [pyiron node store](https://github.com/pyiron-node-store/); this is just for proof-of-concept.
+## Workflows
+
+### Elastic tensor
+
+...
+
+### Solute-grain boundary segregation
+
+...
+
+### Unary phase diagram
+
+...
+
+## Installation
+
+...
