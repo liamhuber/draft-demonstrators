@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
-name = "draft-demonstrators"
-version = "0.1.0"
-requires-python = ">=3.14"
+name = "demonstrators"
+dynamic = ["version"]
+requires-python = "==3.13.*"
 dependencies = [
     "aimsgb==1.1.1",
     "ase==3.29.0",
@@ -23,14 +23,21 @@ dependencies = [
     "structuretoolkit==0.0.47",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
     "ipykernel==7.4.0",
     "coverage==7.16.2",
     "papermill==2.7.0",
 ]
 
-[tool.setuptools]
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "demonstrators/_version.py"
+
+[tool.hatch.build.targets.wheel]
 packages = ["demonstrators"]
 
 [tool.coverage.run]
