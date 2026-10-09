@@ -45,3 +45,7 @@ source = ["pmd03"]
 # The notebooks run in Jupyter kernel subprocesses
 patch = ["subprocess"]
 parallel = true
+
+[tool.ruff.lint.per-file-ignores]
+# Redundant aliases mark explicit (PEP 484) re-exports of the public API
+"pmd03/api.py" = ["PLC0414"]
