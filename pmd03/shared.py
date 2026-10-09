@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Annotated, TypeAlias
+from typing import Annotated
 
 import ase
 import flowrep as fr
@@ -7,7 +7,7 @@ from pyiron_workflow_atomistics import engine as engine_mod
 
 from . import uris
 
-InputType: TypeAlias = (
+type InputType = (
     engine_mod.CalcInputStatic | engine_mod.CalcInputMinimize | engine_mod.CalcInputMD
 )
 
