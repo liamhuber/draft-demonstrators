@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "draft-demonstrators"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "aimsgb==1.1.1",
+    "ase==3.29.0",
+    "bagofholding==0.1.15",
+    "flowrep[drawing]==0.6.7",
+    "freud-analysis==3.6.1",
+    "lz-GB-code==0.1.0",
+    "matplotlib==3.11.2",
+    "numpy==2.4.6",
+    "pandas==3.0.6",
+    "pyiron_workflow==0.20.3",
+    "pyiron_workflow_atomistics[phonons]==0.2.2",
+    "rdflib==7.6.0",
+    "semantikon==1.4.4",
+    "structuretoolkit==0.0.47",
+]
+
+[project.optional-dependencies]
+test = [
+    "ipykernel==7.4.0",
+    "coverage==7.16.2",
+    "papermill==2.7.0",
+]
+
+[tool.setuptools]
+packages = ["demonstrators"]
+
+[tool.coverage.run]
+source = ["demonstrators"]
+# The notebooks run in Jupyter kernel subprocesses
+patch = ["subprocess"]
+parallel = true

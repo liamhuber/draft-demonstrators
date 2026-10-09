@@ -11,6 +11,7 @@ from demonstrators import patches
 
 _EAM_POTENTIAL = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "resources",
     "Pb_II_Wang_2018.eam.alloy",
 )
 
