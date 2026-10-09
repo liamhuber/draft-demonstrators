@@ -7,4 +7,4 @@ pyiron.log
 .idea/
 .ipynb_checkpoints/
 CLAUDE.md
-demonstrators/_version.py
+pmd03/_version.py

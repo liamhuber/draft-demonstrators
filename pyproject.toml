@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "demonstrators"
+name = "pmd03"
 dynamic = ["version"]
 requires-python = "==3.13.*"
 dependencies = [
@@ -35,13 +35,13 @@ source = "vcs"
 fallback-version = "0.0.0"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "demonstrators/_version.py"
+version-file = "pmd03/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["demonstrators"]
+packages = ["pmd03"]
 
 [tool.coverage.run]
-source = ["demonstrators"]
+source = ["pmd03"]
 # The notebooks run in Jupyter kernel subprocesses
 patch = ["subprocess"]
 parallel = true
