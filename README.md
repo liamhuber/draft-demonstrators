@@ -18,4 +18,30 @@ The [`ex3-phase_stability`](ex3-phase_stability.ipynb) notebook maps which cryst
 
 ## Installation
 
-...
+Clone the repository to get the notebooks:
+
+```bash
+git clone https://github.com/pyiron-node-store/pmd03_demonstrators.git
+cd pmd03_demonstrators
+```
+
+The workflows need Python 3.13. Installing the package pulls in the exact dependency versions the demonstrations were developed and tested with. We recommend doing this in a fresh virtual environment, so you get exactly what's needed and nothing in an existing environment conflicts with the pins:
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+pip install .
+pip install jupyterlab  # or any other way you like to run notebooks
+```
+
+If you already manage an environment you'd rather use, this step is optional, but the notebooks expect the pinned versions in `pyproject.toml`.
+
+Drawing the workflow graphs also needs [Graphviz](https://graphviz.org/download/) installed on the system itself. The `graphviz` Python package installed above only calls Graphviz's `dot` executable, so `dot` must be on your `PATH`. Check with `dot -V`, and if it is missing, install it, e.g.:
+
+```bash
+conda install -c conda-forge graphviz  # conda/mamba, any OS
+brew install graphviz                  # macOS with Homebrew
+sudo apt-get install graphviz          # Debian/Ubuntu
+```
+
+Alternatively, the `.binder/` configuration sets all of this up for running the notebooks in the browser on [Binder](https://mybinder.org/).
